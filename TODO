@@ -1,0 +1,6 @@
+* Add completion for command arguments
+* Add support for grep
+* Add support for more while printing
+* Add ability to run full commands in a single line
+* Add support for running commands from file
+
