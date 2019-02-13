@@ -278,6 +278,9 @@ static char **icli_completion(const char *text, int start, int end UNUSED)
 {
     char **matches;
 
+    /* Don't do filename completion even if our generator finds no matches. */
+    rl_attempted_completion_over = 1;
+
     matches = (char **)NULL;
 
     /* If this word is at the start of the line, then it is a command
