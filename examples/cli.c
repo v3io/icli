@@ -22,6 +22,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+struct my_context {
+    int something;
+};
+
 static int cli_show_containers(void)
 {
     icli_printf("Container: %d\n", 1);
@@ -33,7 +37,9 @@ static int cli_show_containers(void)
 
 static enum icli_ret cli_containers_list(char *argv[], int argc, void *context)
 {
-    struct md_util *self = context;
+    struct my_context *self = context;
+
+    self->something = 1;
 
     icli_printf("args:\n\n");
     for (int i = 0; i < argc; ++i)
@@ -52,6 +58,8 @@ static enum icli_ret cli_show(char *argv[], int argc, void *context)
 {
     struct my_context *self = context;
 
+    self->something = 2;
+
     int ret = cli_show_containers();
     if (ret) {
         icli_err_printf("Error in cli_show_containers:%d\n", ret);
@@ -60,10 +68,6 @@ static enum icli_ret cli_show(char *argv[], int argc, void *context)
 
     return ICLI_OK;
 }
-
-struct my_context {
-    int something;
-};
 
 int main(int argc, char *argv[])
 {
