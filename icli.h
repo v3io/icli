@@ -1,6 +1,11 @@
 #pragma once
 
 /**
+ * @file
+ * @brief icli API
+ */
+
+/**
  * Maximum number of arguments for single command
  */
 #define ICLI_ARGS_MAX 20
@@ -33,8 +38,11 @@ struct icli_command;
  */
 typedef enum icli_ret icli_cmd_func_t(char *[], int, void *);
 
+/**
+ * Argument value
+ */
 struct icli_arg_val {
-    const char *val;
+    const char *val; /**< Actual value */
 };
 
 /**
