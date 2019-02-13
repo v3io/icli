@@ -4,8 +4,9 @@ Interactive cli/shell library for C
 A library that adds the ability to implement CISCO-like interactive shells from C code.
 Please see examples directory for sample code and API usage.
 
-Example shell implementation:
+## Example cli session:
 
+```
 $ ./cli 
 my_cli> help 
 Available commands:
@@ -36,3 +37,4 @@ Command show accepts exactly 1 arguments. 0 were provided
 my_cli> show cont
 Command show 0 argument invalid: cont
 my_cli> quit
+```
