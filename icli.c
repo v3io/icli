@@ -207,7 +207,23 @@ static int icli_execute_line(char *line)
                 }
 
                 if (!found) {
-                    icli_printf("Command %s %d argument invalid: %s\n", cmd, i, argv[i]);
+                    icli_printf("Command %s %d argument invalid: %s. Possible values:\n", cmd, i, argv[i]);
+
+                    int printed = 0;
+                    for (vals = command->argv[i]; vals->val; ++vals) {
+                        /* Print in six columns. */
+                        if (printed == 6) {
+                            printed = 0;
+                            icli_printf("\n");
+                        }
+
+                        icli_printf("%s\t", vals->val);
+                        printed++;
+                    }
+
+                    if (printed)
+                        icli_printf("\n");
+
                     return -1;
                 }
             }
