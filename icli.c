@@ -54,6 +54,9 @@ struct icli {
     struct icli_command *curr_cmd;
     char *curr_prompt;
     const char *prompt;
+
+    struct icli_command *curr_completion_cmd;
+    int curr_completion_arg;
 };
 
 static struct icli icli;
@@ -254,6 +257,37 @@ static int icli_execute_line(char *line)
     return 0;
 }
 
+/* Generator function for command argument completion.  STATE lets us
+   know whether to start from scratch; without any state
+   (i.e. STATE == 0), then we start at the top of the list. */
+static char *icli_command_arg_generator(const char *text, int state)
+{
+    static size_t len;
+    static struct icli_arg_val *vals;
+    const char *name;
+
+    /* If this is a new word to complete, initialize now.  This
+       includes saving the length of TEXT for efficiency, and
+       initializing the index variable to 0. */
+    if (!state) {
+        len = strlen(text);
+        vals = icli.curr_completion_cmd->argv[icli.curr_completion_arg - 1];
+    }
+
+    /* Return the next name which partially matches from the
+       argument list. */
+    while (vals && vals->val) {
+        name = vals->val;
+
+        ++vals;
+        if (strncmp(name, text, len) == 0)
+            return (strdup(name));
+    }
+
+    /* If no names matched, then return NULL. */
+    return ((char *)NULL);
+}
+
 /* Generator function for command completion.  STATE lets us
    know whether to start from scratch; without any state
    (i.e. STATE == 0), then we start at the top of the list. */
@@ -294,18 +328,41 @@ static char **icli_completion(const char *text, int start, int end UNUSED)
 {
     char **matches;
 
+    static char *argv[ICLI_ARGS_MAX];
+    char *cmd;
+
+    static char tmp[4096];
+    strncpy(tmp, rl_line_buffer, array_len(tmp));
+    stripwhite(tmp);
+
+    int argc = icli_parse_line(tmp, &cmd, argv, array_len(argv));
+
     /* Don't do filename completion even if our generator finds no matches. */
     rl_attempted_completion_over = 1;
 
     matches = (char **)NULL;
 
+    icli.curr_completion_cmd = NULL;
+
     /* If this word is at the start of the line, then it is a command
-       to complete.  Otherwise it is the name of a file in the current
-       directory. */
-    if (start == 0)
-        /* TODO */
+           to complete.  Otherwise it is the name of a file in the current
+           directory. */
+    if (start == 0) {
+
         matches = completion_matches((char *)text, icli_command_generator);
-    /* matches = rl_completion_matches (text, icli_command_generator); */
+        /* matches = rl_completion_matches (text, icli_command_generator); */
+    } else {
+        if (argc > 0) {
+            struct icli_command *command = icli_find_command(cmd);
+            if (command && command->argc != ICLI_ARGS_DYNAMIC) {
+                if (argc <= command->argc) {
+                    icli.curr_completion_cmd = command;
+                    icli.curr_completion_arg = argc;
+                    matches = completion_matches((char *)text, icli_command_arg_generator);
+                }
+            }
+        }
+    }
 
     return matches;
 }
@@ -565,7 +622,7 @@ int icli_init(struct icli_params *params)
 
     /* Tell the completer that we want a crack first. */
     rl_attempted_completion_function = icli_completion;
-    rl_completion_entry_function = icli_command_generator;
+    rl_completion_entry_function = (Function *)icli_command_generator;
 
     stifle_history(params->history_size);
 

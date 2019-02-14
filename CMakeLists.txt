@@ -12,7 +12,7 @@ endif()
 project(icli)
 
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack")
 set(warning_flags "-Wall \
                   -Werror \
                   -Wsign-compare \
@@ -26,12 +26,12 @@ set(warning_flags "-Wall \
                   -Winit-self \
                   -Wno-unused-function")
 
-set(CMAKE_CXX_FLAGS_DEBUG "${warning_flags} \
+set(CMAKE_C_FLAGS_DEBUG "${warning_flags} \
                           -O0 \
                           -ggdb \
                           -D_FORTIFY_SOURCE=2")
 
-set(CMAKE_CXX_FLAGS_RELEASE "${warning_flags} \
+set(CMAKE_C_FLAGS_RELEASE "${warning_flags} \
                             -O2 \
                             -DNDEBUG \
                             -U_FORTIFY_SOURCE")
