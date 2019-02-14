@@ -36,18 +36,18 @@ set(CMAKE_C_FLAGS_RELEASE "${warning_flags} \
                             -DNDEBUG \
                             -U_FORTIFY_SOURCE")
 
-set(target libicli)
+set(target icli)
 
 add_library(${target} STATIC icli.c)
 target_include_directories(${target} PUBLIC .)
 
 set(target cli)
 
-add_executable(${target} examples/cli.c)
+add_executable(${target} EXCLUDE_FROM_ALL examples/cli.c)
 target_include_directories(${target} PUBLIC .)
 
 target_link_libraries(${target}
-                      libicli
+                      icli
                       edit
                       )
 
