@@ -20,6 +20,8 @@
 
 #include "icli.h"
 
+#define _GNU_SOURCE
+
 #include <string.h>
 #include <ctype.h>
 #include <stdint.h>
@@ -281,11 +283,11 @@ static char *icli_command_arg_generator(const char *text, int state)
 
         ++vals;
         if (strncmp(name, text, len) == 0)
-            return (strdup(name));
+            return strdup(name);
     }
 
     /* If no names matched, then return NULL. */
-    return ((char *)NULL);
+    return (char *)NULL;
 }
 
 /* Generator function for command completion.  STATE lets us
@@ -312,11 +314,11 @@ static char *icli_command_generator(const char *text, int state)
         list_index++;
 
         if (strncmp(name, text, len) == 0)
-            return (strdup(name));
+            return strdup(name);
     }
 
     /* If no names matched, then return NULL. */
-    return ((char *)NULL);
+    return (char *)NULL;
 }
 
 /* Attempt to complete on the contents of TEXT.  START and END
