@@ -624,7 +624,7 @@ int icli_init(struct icli_params *params)
 
     /* Tell the completer that we want a crack first. */
     rl_attempted_completion_function = icli_completion;
-    rl_completion_entry_function = (Function *)icli_command_generator;
+    rl_completion_entry_function = icli_command_generator;
 
     stifle_history(params->history_size);
 

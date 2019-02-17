@@ -18,7 +18,6 @@ endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -std=c99")
 set(warning_flags "-Wall \
-                  -Werror \
                   -Wsign-compare \
                   -Wclobbered \
                   -Wempty-body \
