@@ -33,6 +33,9 @@
 
 #include <editline/readline.h>
 
+#define ANSI_RED_NORMAL "\x1b[0;31m"
+#define ANSI_RESET "\x1b[0m"
+
 /* A structure which contains information on the commands this program
    can understand. */
 struct icli_command {
@@ -180,19 +183,22 @@ static int icli_execute_line(char *line)
     command = icli_find_command(cmd);
 
     if (!command) {
-        icli_printf("%s: No such command\n", cmd);
+        icli_err_printf("%s: No such command\n", cmd);
         return -1;
     }
 
     if (!command->func && argc) {
-        icli_printf("Command %s does not accept arguments\n", cmd);
+        icli_err_printf("Command %s does not accept arguments\n", cmd);
         return -1;
     }
 
     if (command->func) {
         if (command->argc != ICLI_ARGS_DYNAMIC) {
             if (command->argc != argc) {
-                icli_printf("Command %s accepts exactly %d arguments. %d were provided\n", cmd, command->argc, argc);
+                icli_err_printf("Command %s accepts exactly %d arguments. %d were provided\n",
+                                cmd,
+                                command->argc,
+                                argc);
                 return -1;
             }
 
@@ -212,22 +218,22 @@ static int icli_execute_line(char *line)
                 }
 
                 if (!found) {
-                    icli_printf("Command %s %d argument invalid: %s. Possible values:\n", cmd, i, argv[i]);
+                    icli_err_printf("Command %s %d argument invalid: %s. Possible values:\n", cmd, i, argv[i]);
 
                     int printed = 0;
                     for (vals = command->argv[i]; vals->val; ++vals) {
                         /* Print in six columns. */
                         if (printed == 6) {
                             printed = 0;
-                            icli_printf("\n");
+                            icli_err_printf("\n");
                         }
 
-                        icli_printf("%s\t", vals->val);
+                        icli_err_printf("%s\t", vals->val);
                         printed++;
                     }
 
                     if (printed)
-                        icli_printf("\n");
+                        icli_err_printf("\n");
 
                     return -1;
                 }
@@ -241,11 +247,11 @@ static int icli_execute_line(char *line)
         case ICLI_OK:
             break;
         case ICLI_ERR_ARG:
-            icli_printf("Argument error\n");
+            icli_err_printf("Argument error\n");
             return -1;
             break;
         case ICLI_ERR:
-            icli_printf("Error\n");
+            icli_err_printf("Error\n");
             return -1;
             break;
         }
@@ -422,21 +428,21 @@ static enum icli_ret icli_help(char *argv[], int argc, void *context UNUSED)
     }
 
     if (!printed) {
-        icli_printf("No commands match `%s'.  Possibilities are:\n", argv[0]);
+        icli_err_printf("No commands match '%s'.  Possibilities are:\n", argv[0]);
 
         for (i = 0; i < icli.curr_cmd->n_cmds; i++) {
             /* Print in six columns. */
             if (printed == 6) {
                 printed = 0;
-                icli_printf("\n");
+                icli_err_printf("\n");
             }
 
-            icli_printf("%s\t", icli.curr_cmd->cmds[i].name);
+            icli_err_printf("%s\t", icli.curr_cmd->cmds[i].name);
             printed++;
         }
 
         if (printed)
-            icli_printf("\n");
+            icli_err_printf("\n");
     }
     return ICLI_OK;
 }
@@ -707,9 +713,11 @@ void icli_err_printf(const char *format, ...)
 {
     va_list args;
 
+    printf(ANSI_RED_NORMAL);
     va_start(args, format);
     vprintf(format, args);
     va_end(args);
+    printf(ANSI_RESET);
 }
 
 void icli_set_prompt(const char *prompt)
