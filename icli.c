@@ -33,7 +33,14 @@
 
 #include <editline/readline.h>
 
-#define ANSI_RED_NORMAL "\x1b[0;31m"
+#define ANSI_BLACK_NORMAL "\x1b[30m"
+#define ANSI_RED_NORMAL "\x1b[31m"
+#define ANSI_GREEN_NORMAL "\x1b[32m"
+#define ANSI_YELLOW_NORMAL "\x1b[33m"
+#define ANSI_BLUE_NORMAL "\x1b[34m"
+#define ANSI_MAGENTA_NORMAL "\x1b[35m"
+#define ANSI_CYAN_NORMAL "\x1b[36m"
+#define ANSI_WHITE_NORMAL "\x1b[37m"
 #define ANSI_RESET "\x1b[0m"
 
 /* A structure which contains information on the commands this program
