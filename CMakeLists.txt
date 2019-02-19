@@ -37,6 +37,7 @@ set(CMAKE_C_FLAGS_DEBUG "${warning_flags} \
 set(CMAKE_C_FLAGS_RELEASE "${warning_flags} \
                             -O2 \
                             -DNDEBUG \
+                            -ggdb \
                             -U_FORTIFY_SOURCE")
 
 set(target icli)
