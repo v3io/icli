@@ -35,6 +35,13 @@ static int cli_show_containers(void)
     return 0;
 }
 
+static int cli_show_services(void)
+{
+    icli_printf("Service: %d\n", 1);
+    icli_printf("Service: %d\n", 2);
+    return 0;
+}
+
 static enum icli_ret cli_containers_list(char *argv[], int argc, void *context)
 {
     struct my_context *self = context;
@@ -57,15 +64,23 @@ static enum icli_ret cli_containers_list(char *argv[], int argc, void *context)
 static enum icli_ret cli_show(char *argv[], int argc, void *context)
 {
     struct my_context *self = context;
+    int ret;
 
     self->something = 2;
 
-    int ret = cli_show_containers();
-    if (ret) {
-        icli_err_printf("Error in cli_show_containers:%d\n", ret);
-        return ICLI_ERR;
+    if (strcmp(argv[0], "containers") == 0) {
+        ret = cli_show_containers();
+        if (ret) {
+            icli_err_printf("Error in cli_show_containers:%d\n", ret);
+            return ICLI_ERR;
+        }
+    } else if (strcmp(argv[0], "services") == 0) {
+        ret = cli_show_services();
+        if (ret) {
+            icli_err_printf("Error in cli_show_services:%d\n", ret);
+            return ICLI_ERR;
+        }
     }
-
     return ICLI_OK;
 }
 
@@ -87,7 +102,7 @@ int main(int argc, char *argv[])
     struct icli_command *containers;
     struct icli_command_params param = {.name = "containers", .help = "Containers"};
 
-    struct icli_arg_val show_first_arg[] = {{.val = "containers"}, {.val = NULL}};
+    struct icli_arg_val show_first_arg[] = {{.val = "containers"}, {.val = "services"}, {.val = NULL}};
     struct icli_arg_val *show_args[] = {show_first_arg};
 
     res = icli_register_command(&param, &containers);

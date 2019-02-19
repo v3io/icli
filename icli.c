@@ -273,7 +273,10 @@ static char *icli_command_arg_generator(const char *text, int state)
        initializing the index variable to 0. */
     if (!state) {
         len = strlen(text);
-        vals = icli.curr_completion_cmd->argv[icli.curr_completion_arg - 1];
+        if (len)
+            vals = icli.curr_completion_cmd->argv[icli.curr_completion_arg - 1];
+        else
+            vals = icli.curr_completion_cmd->argv[icli.curr_completion_arg];
     }
 
     /* Return the next name which partially matches from the
@@ -334,7 +337,8 @@ static char **icli_completion(const char *text, int start, int end UNUSED)
     char *cmd;
 
     static char tmp[4096];
-    strncpy(tmp, rl_line_buffer, array_len(tmp));
+    memcpy(tmp, rl_line_buffer, (size_t)rl_end);
+    tmp[rl_end] = '\0';
     stripwhite(tmp);
 
     int argc = icli_parse_line(tmp, &cmd, argv, array_len(argv));
@@ -345,23 +349,20 @@ static char **icli_completion(const char *text, int start, int end UNUSED)
     matches = (char **)NULL;
 
     icli.curr_completion_cmd = NULL;
+    icli.curr_completion_arg = 0;
 
     /* If this word is at the start of the line, then it is a command
-           to complete.  Otherwise it is the name of a file in the current
-           directory. */
+     * to complete */
     if (start == 0) {
-
         matches = completion_matches((char *)text, icli_command_generator);
         /* matches = rl_completion_matches (text, icli_command_generator); */
     } else {
-        if (argc > 0) {
-            struct icli_command *command = icli_find_command(cmd);
-            if (command && command->argc != ICLI_ARGS_DYNAMIC) {
-                if (argc <= command->argc) {
-                    icli.curr_completion_cmd = command;
-                    icli.curr_completion_arg = argc;
-                    matches = completion_matches((char *)text, icli_command_arg_generator);
-                }
+        struct icli_command *command = icli_find_command(cmd);
+        if (command && command->argc != ICLI_ARGS_DYNAMIC) {
+            if (argc <= command->argc) {
+                icli.curr_completion_cmd = command;
+                icli.curr_completion_arg = argc;
+                matches = completion_matches((char *)text, icli_command_arg_generator);
             }
         }
     }
