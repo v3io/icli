@@ -71,6 +71,7 @@ struct icli_arg_val {
 struct icli_command_params {
     struct icli_command *parent; /**< parent of the command - root command if NULL is provided */
     const char *name; /**< name of the command - can't be NULL, or empty string */
+    const char *short_name; /**< short version to be displayed in prompt */
     icli_cmd_func_t *command; /**< the callback to call - if NULL is passed, command will not accept arguments */
     const char *help; /**< help string for the command - can't be NULL, or empty string */
     int argc; /**< number of arguments to the command @see #ICLI_ARGS_DYNAMIC */

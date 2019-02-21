@@ -152,6 +152,7 @@ int main(int argc, char *argv[])
     memset(&param, 0, sizeof(param));
     param.help = "Services";
     param.name = "services";
+    param.short_name = "svc";
 
     res = icli_register_command(&param, &services);
     if (res) {

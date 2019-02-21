@@ -47,6 +47,7 @@
    can understand. */
 struct icli_command {
     char *name; /* User printable name of the function. */
+    char *short_name;
     icli_cmd_func_t *func; /* Function to call to do the job. */
     char *doc; /* Documentation for this function.  */
     struct icli_command *cmds;
@@ -119,7 +120,10 @@ static void icli_cat_command(struct icli_command *curr)
 
     if (curr->name) {
         strcat(icli.curr_prompt, "(");
-        strcat(icli.curr_prompt, curr->name);
+        if (curr->short_name)
+            strcat(icli.curr_prompt, curr->short_name);
+        else
+            strcat(icli.curr_prompt, curr->name);
         strcat(icli.curr_prompt, ")");
     }
 }
@@ -131,7 +135,10 @@ static void icli_build_prompt(struct icli_command *command)
 
     struct icli_command *curr = command;
     while (curr) {
-        if (curr->name) {
+        if (curr->short_name) {
+            /*command + '(' + ')' */
+            buf_sz += 2 + strlen(curr->short_name);
+        } else if (curr->name) {
             /*command + '(' + ')' */
             buf_sz += 2 + strlen(curr->name);
         }
@@ -491,6 +498,8 @@ static void icli_clean_command(struct icli_command *cmd)
 
     free(cmd->name);
     cmd->name = NULL;
+    free(cmd->short_name);
+    cmd->short_name = NULL;
     free(cmd->doc);
     cmd->doc = NULL;
 
@@ -577,6 +586,8 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
     cmd->func = params->command;
     cmd->parent = parent;
     cmd->argc = params->argc;
+    if (params->short_name)
+        cmd->short_name = strdup(params->short_name);
 
     if (params->argv) {
         cmd->argv = calloc((size_t)cmd->argc, sizeof(struct icli_arg_val *));
