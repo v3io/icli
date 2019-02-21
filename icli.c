@@ -110,6 +110,20 @@ static struct icli_command *icli_find_command(char *name)
     return ((struct icli_command *)NULL);
 }
 
+static void icli_cat_command(struct icli_command *curr)
+{
+    if (!curr->parent)
+        return;
+
+    icli_cat_command(curr->parent);
+
+    if (curr->name) {
+        strcat(icli.curr_prompt, "(");
+        strcat(icli.curr_prompt, curr->name);
+        strcat(icli.curr_prompt, ")");
+    }
+}
+
 static void icli_build_prompt(struct icli_command *command)
 {
     /*'\0' + prompt + '>' + ' ' */
@@ -128,15 +142,7 @@ static void icli_build_prompt(struct icli_command *command)
     icli.curr_prompt = malloc(buf_sz);
 
     strncpy(icli.curr_prompt, icli.prompt, buf_sz);
-    curr = command;
-    while (curr) {
-        if (curr->name) {
-            strcat(icli.curr_prompt, "(");
-            strcat(icli.curr_prompt, curr->name);
-            strcat(icli.curr_prompt, ")");
-        }
-        curr = curr->parent;
-    }
+    icli_cat_command(command);
 
     strcat(icli.curr_prompt, "> ");
 }
@@ -371,7 +377,7 @@ static char **icli_completion(const char *text, int start, int end UNUSED)
         /* matches = rl_completion_matches (text, icli_command_generator); */
     } else {
         struct icli_command *command = icli_find_command(cmd);
-        if (command && command->argc != ICLI_ARGS_DYNAMIC) {
+        if (command && command->argc != ICLI_ARGS_DYNAMIC && command->argc) {
             if (argc <= command->argc) {
                 icli.curr_completion_cmd = command;
                 icli.curr_completion_arg = argc;
