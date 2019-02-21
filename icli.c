@@ -468,7 +468,7 @@ static int icli_init_default_cmds(struct icli_command *parent)
           .command = icli_help,
           .argc = ICLI_ARGS_DYNAMIC,
           .help = "Show available commands or show help of a specific command"},
-         {.parent = parent, .name = "?", .command = icli_help, .argc = ICLI_ARGS_DYNAMIC, .help = "Synonym for `help'"},
+         {.parent = parent, .name = "?", .command = icli_help, .argc = ICLI_ARGS_DYNAMIC, .help = "Synonym for 'help'"},
          {.parent = parent,
           .name = "history",
           .command = icli_history,
@@ -480,27 +480,29 @@ static int icli_init_default_cmds(struct icli_command *parent)
 static void icli_clean_command(struct icli_command *cmd)
 {
     for (size_t i = 0; i < cmd->n_cmds; ++i) {
-        struct icli_command *curr_cmd = &cmd->cmds[i];
-        icli_clean_command(curr_cmd);
-
-        free(curr_cmd->name);
-        curr_cmd->name = NULL;
-        free(curr_cmd->doc);
-        curr_cmd->doc = NULL;
-
-        if (curr_cmd->argc && curr_cmd->argv) {
-            for (int j = 0; j < curr_cmd->argc; ++j) {
-                for (struct icli_arg_val *val = curr_cmd->argv[j]; val && val->val; ++val) {
-                    free((void *)val->val);
-                }
-                free(curr_cmd->argv[j]);
-                curr_cmd->argv[j] = NULL;
-            }
-
-            free(curr_cmd->argv);
-            curr_cmd->argv = NULL;
-        }
+        icli_clean_command(&cmd->cmds[i]);
     }
+
+    free(cmd->name);
+    cmd->name = NULL;
+    free(cmd->doc);
+    cmd->doc = NULL;
+
+    if (cmd->argc && cmd->argv) {
+        for (int j = 0; j < cmd->argc; ++j) {
+            for (struct icli_arg_val *val = cmd->argv[j]; val && val->val; ++val) {
+                free((void *)val->val);
+                val->val = NULL;
+            }
+            free(cmd->argv[j]);
+            cmd->argv[j] = NULL;
+        }
+
+        free(cmd->argv);
+        cmd->argv = NULL;
+    }
+
+    cmd->argc = 0;
 
     free(cmd->cmds);
     cmd->cmds = NULL;
@@ -524,6 +526,7 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
     bool need_end = true;
     struct icli_command *parent;
     int ret = 0;
+    size_t cmd_idx;
 
     if (out_command)
         *out_command = NULL;
@@ -547,7 +550,14 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
         parent = &icli.root_cmd;
     }
 
-    void *new_cmds = realloc(parent->cmds, sizeof(struct icli_command) * (parent->n_cmds + 1));
+    for (size_t idx = 0; idx < parent->n_cmds; ++idx) {
+        if (strcmp(parent->cmds[idx].name, params->name) == 0) {
+            return -1;
+        }
+    }
+
+    cmd_idx = parent->n_cmds;
+    struct icli_command *new_cmds = realloc(parent->cmds, sizeof(struct icli_command) * (parent->n_cmds + 1));
     if (NULL == new_cmds)
         return -1;
 
@@ -556,6 +566,7 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
 
     memset(cmd, 0, sizeof(*cmd));
     cmd->name = strdup(params->name);
+    cmd->name_len = (int)strlen(cmd->name);
     cmd->doc = strdup(params->help);
     cmd->func = params->command;
     cmd->parent = parent;
@@ -566,6 +577,7 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
         if (!cmd->argv) {
             parent->cmds = realloc(parent->cmds, sizeof(struct icli_command) * (parent->n_cmds));
             ret = -1;
+            icli_clean_command(cmd);
             goto out;
         }
 
@@ -586,14 +598,17 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
 
                 for (int j = 0; params->argv[i][j].val; ++j) {
                     vals[j].val = strdup(params->argv[i][j].val);
+                    if (!vals[j].val) {
+                        ret = -1;
+                        icli_clean_command(cmd);
+                        goto out;
+                    }
                 }
             }
         }
     }
 
     ++parent->n_cmds; /* This must be after argv initialization */
-
-    cmd->name_len = (int)strlen(cmd->name);
 
     if (cmd->name_len > parent->max_name_len)
         parent->max_name_len = cmd->name_len;
@@ -616,7 +631,7 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
     }
 
     if (out_command)
-        *out_command = cmd;
+        *out_command = &parent->cmds[cmd_idx];
 
 out:
     return ret;
@@ -624,15 +639,12 @@ out:
 
 int icli_init(struct icli_params *params)
 {
-    memset(&icli, 0, sizeof(struct icli));
+    memset(&icli, 0, sizeof(icli));
 
     icli.user_data = params->user_data;
     icli.curr_cmd = &icli.root_cmd;
     icli.prompt = strdup(params->prompt);
 
-    /* Tell the Readline library how to complete.  We want to try to
-   complete on command names if this is the first word in the line, or
-   on filenames if not. */
     /* Allow conditional parsing of the ~/.inputrc file. */
     rl_readline_name = strdup(params->app_name);
 

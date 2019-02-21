@@ -20,11 +20,19 @@
 
 #include "icli.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 struct my_context {
     int something;
 };
+
+static enum icli_ret cli_list_jobs(char *argv[], int argc, void *context)
+{
+    icli_printf("Jobs: %d\n", 123);
+
+    return ICLI_OK;
+}
 
 static int cli_show_containers(void)
 {
@@ -96,10 +104,12 @@ int main(int argc, char *argv[])
                                  .prompt = "my_cli"};
 
     res = icli_init(&params);
-    if (res)
+    if (res) {
+        fprintf(stderr, "Unable to init icli\n");
         return EXIT_FAILURE;
+    }
 
-    struct icli_command *containers;
+    struct icli_command *containers, *services, *jobs;
     struct icli_command_params param = {.name = "containers", .help = "Containers"};
 
     struct icli_arg_val show_first_arg[] = {{.val = "containers"}, {.val = "services"}, {.val = NULL}};
@@ -107,6 +117,7 @@ int main(int argc, char *argv[])
 
     res = icli_register_command(&param, &containers);
     if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
         ret = EXIT_FAILURE;
         goto out;
     }
@@ -119,6 +130,7 @@ int main(int argc, char *argv[])
 
     res = icli_register_command(&param, NULL);
     if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
         ret = EXIT_FAILURE;
         goto out;
     }
@@ -132,6 +144,43 @@ int main(int argc, char *argv[])
 
     res = icli_register_command(&param, NULL);
     if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
+        ret = EXIT_FAILURE;
+        goto out;
+    }
+
+    memset(&param, 0, sizeof(param));
+    param.help = "Services";
+    param.name = "services";
+
+    res = icli_register_command(&param, &services);
+    if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
+        ret = EXIT_FAILURE;
+        goto out;
+    }
+
+    memset(&param, 0, sizeof(param));
+    param.parent = services;
+    param.help = "Jobs";
+    param.name = "jobs";
+
+    res = icli_register_command(&param, &jobs);
+    if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
+        ret = EXIT_FAILURE;
+        goto out;
+    }
+
+    memset(&param, 0, sizeof(param));
+    param.parent = jobs;
+    param.help = "List jobs";
+    param.name = "list";
+    param.command = cli_list_jobs;
+
+    res = icli_register_command(&param, NULL);
+    if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
         ret = EXIT_FAILURE;
         goto out;
     }
