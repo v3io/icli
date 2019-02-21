@@ -222,40 +222,42 @@ static int icli_execute_line(char *line)
                 return -1;
             }
 
-            for (int i = 0; i < command->argc; ++i) {
-                struct icli_arg_val *vals = command->argv[i];
-                bool found = false;
+            if (command->argv) {
+                for (int i = 0; i < command->argc; ++i) {
+                    struct icli_arg_val *vals = command->argv[i];
+                    bool found = false;
 
-                if (!vals)
-                    continue;
+                    if (!vals)
+                        continue;
 
-                while (vals->val) {
-                    if (strcmp(vals->val, argv[i]) == 0) {
-                        found = true;
-                        break;
+                    while (vals->val) {
+                        if (strcmp(vals->val, argv[i]) == 0) {
+                            found = true;
+                            break;
+                        }
+                        ++vals;
                     }
-                    ++vals;
-                }
 
-                if (!found) {
-                    icli_err_printf("Command %s %d argument invalid: %s. Possible values:\n", cmd, i, argv[i]);
+                    if (!found) {
+                        icli_err_printf("Command %s %d argument invalid: %s. Possible values:\n", cmd, i, argv[i]);
 
-                    int printed = 0;
-                    for (vals = command->argv[i]; vals->val; ++vals) {
-                        /* Print in six columns. */
-                        if (printed == 6) {
-                            printed = 0;
-                            icli_err_printf("\n");
+                        int printed = 0;
+                        for (vals = command->argv[i]; vals->val; ++vals) {
+                            /* Print in six columns. */
+                            if (printed == 6) {
+                                printed = 0;
+                                icli_err_printf("\n");
+                            }
+
+                            icli_err_printf("%s\t", vals->val);
+                            printed++;
                         }
 
-                        icli_err_printf("%s\t", vals->val);
-                        printed++;
+                        if (printed)
+                            icli_err_printf("\n");
+
+                        return -1;
                     }
-
-                    if (printed)
-                        icli_err_printf("\n");
-
-                    return -1;
                 }
             }
         }
