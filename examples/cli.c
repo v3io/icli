@@ -69,6 +69,13 @@ static enum icli_ret cli_containers_list(char *argv[], int argc, void *context)
     return ICLI_OK;
 }
 
+static enum icli_ret cli_interface(char *argv[], int argc, void *context)
+{
+    icli_printf("Set interface %s\n", argv[0]);
+
+    return ICLI_OK;
+}
+
 static enum icli_ret cli_show(char *argv[], int argc, void *context)
 {
     struct my_context *self = context;
@@ -141,6 +148,19 @@ int main(int argc, char *argv[])
     param.command = cli_show;
     param.argc = 1;
     param.argv = show_args;
+
+    res = icli_register_command(&param, NULL);
+    if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
+        ret = EXIT_FAILURE;
+        goto out;
+    }
+
+    memset(&param, 0, sizeof(param));
+    param.help = "Set interface";
+    param.name = "interface";
+    param.command = cli_interface;
+    param.argc = 1;
 
     res = icli_register_command(&param, NULL);
     if (res) {

@@ -300,7 +300,11 @@ static char *icli_command_arg_generator(const char *text, int state)
        includes saving the length of TEXT for efficiency, and
        initializing the index variable to 0. */
     if (!state) {
-        len = strlen(text);
+        if (text)
+            len = strlen(text);
+        else
+            len = 0;
+
         if (len)
             vals = icli.curr_completion_cmd->argv[icli.curr_completion_arg - 1];
         else
@@ -335,7 +339,10 @@ static char *icli_command_generator(const char *text, int state)
        initializing the index variable to 0. */
     if (!state) {
         list_index = 0;
-        len = strlen(text);
+        if (text)
+            len = strlen(text);
+        else
+            len = 0;
     }
 
     /* Return the next name which partially matches from the
@@ -387,7 +394,7 @@ static char **icli_completion(const char *text, int start, int end UNUSED)
     } else {
         struct icli_command *command = icli_find_command(cmd);
         if (command && command->argc != ICLI_ARGS_DYNAMIC && command->argc) {
-            if (argc <= command->argc) {
+            if (argc <= command->argc && command->argv) {
                 icli.curr_completion_cmd = command;
                 icli.curr_completion_arg = argc;
                 matches = completion_matches((char *)text, icli_command_arg_generator);
