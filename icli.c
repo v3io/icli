@@ -725,7 +725,9 @@ void icli_run(void)
             char *expansion;
             int result = history_expand(s, &expansion);
 
-            if (result < 0 || result == 2) {
+            if (result < 0) {
+                icli_err_printf("%s\n", expansion);
+            } else if (result == 2) {
                 icli_printf("%s\n", expansion);
             } else {
                 add_history(expansion);
