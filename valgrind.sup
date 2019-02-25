@@ -1,0 +1,33 @@
+{
+   <editline_init_leask>
+   Memcheck:Leak
+   ...
+   fun:rl_initialize
+   ...
+}
+
+{
+   <editline_history_leak>
+   Memcheck:Leak
+   ...
+   fun:add_history
+   ...
+}
+
+{
+   <editline_prompt_leak>
+   Memcheck:Leak
+   ...
+   fun:rl_set_prompt
+   ...
+}
+
+{
+   <editline_el_gets_leak>
+   Memcheck:Leak
+   ...
+   fun:el_gets
+   fun:readline
+   ...
+}
+

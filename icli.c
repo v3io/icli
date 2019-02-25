@@ -690,6 +690,7 @@ int icli_init(struct icli_params *params)
     rl_attempted_completion_function = icli_completion;
     rl_completion_entry_function = icli_command_generator;
 
+    using_history();
     stifle_history(params->history_size);
 
     rl_get_screen_size(&icli.rows, &icli.cols);
