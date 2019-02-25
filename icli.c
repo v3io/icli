@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <sys/queue.h>
 
 #include <editline/readline.h>
 
@@ -46,11 +47,12 @@
 /* A structure which contains information on the commands this program
    can understand. */
 struct icli_command {
+    LIST_ENTRY(icli_command) cmd_list_entry;
     char *name; /* User printable name of the function. */
     char *short_name;
     icli_cmd_func_t *func; /* Function to call to do the job. */
     char *doc; /* Documentation for this function.  */
-    struct icli_command *cmds;
+    LIST_HEAD(, icli_command) cmd_list;
     size_t n_cmds;
     struct icli_command *parent;
     int argc;
@@ -63,7 +65,7 @@ struct icli {
     void *user_data;
     /* When non-zero, this means the user is done using this program. */
     bool done;
-    struct icli_command root_cmd;
+    struct icli_command *root_cmd;
     struct icli_command *curr_cmd;
     char *curr_prompt;
     const char *prompt;
@@ -102,11 +104,13 @@ static char *stripwhite(char *string)
    command.  Return a NULL pointer if NAME isn't a command name. */
 static struct icli_command *icli_find_command(char *name)
 {
-    size_t i;
+    struct icli_command *it;
 
-    for (i = 0; i < icli.curr_cmd->n_cmds; i++)
-        if (strcmp(name, icli.curr_cmd->cmds[i].name) == 0)
-            return (&icli.curr_cmd->cmds[i]);
+    LIST_FOREACH(it, &icli.curr_cmd->cmd_list, cmd_list_entry)
+    {
+        if (strcmp(name, it->name) == 0)
+            return it;
+    }
 
     return ((struct icli_command *)NULL);
 }
@@ -330,7 +334,7 @@ static char *icli_command_arg_generator(const char *text, int state)
    (i.e. STATE == 0), then we start at the top of the list. */
 static char *icli_command_generator(const char *text, int state)
 {
-    static size_t list_index;
+    static struct icli_command *list_entry;
     static size_t len;
     char *name;
 
@@ -338,7 +342,7 @@ static char *icli_command_generator(const char *text, int state)
        includes saving the length of TEXT for efficiency, and
        initializing the index variable to 0. */
     if (!state) {
-        list_index = 0;
+        list_entry = LIST_FIRST(&icli.curr_cmd->cmd_list);
         if (text)
             len = strlen(text);
         else
@@ -347,9 +351,9 @@ static char *icli_command_generator(const char *text, int state)
 
     /* Return the next name which partially matches from the
        command list. */
-    while (list_index < icli.curr_cmd->n_cmds) {
-        name = icli.curr_cmd->cmds[list_index].name;
-        list_index++;
+    while (list_entry) {
+        name = list_entry->name;
+        list_entry = LIST_NEXT(list_entry, cmd_list_entry);
 
         if (strncmp(name, text, len) == 0)
             return strdup(name);
@@ -426,7 +430,7 @@ static enum icli_ret icli_end(char *argv[] UNUSED, int argc UNUSED, void *contex
     icli.curr_cmd = icli.curr_cmd->parent;
 
     if (NULL == icli.curr_cmd) {
-        icli.curr_cmd = &icli.root_cmd;
+        icli.curr_cmd = icli.root_cmd;
     }
 
     icli_build_prompt(icli.curr_cmd);
@@ -438,20 +442,18 @@ static enum icli_ret icli_end(char *argv[] UNUSED, int argc UNUSED, void *contex
    not present. */
 static enum icli_ret icli_help(char *argv[], int argc, void *context UNUSED)
 {
-    size_t i;
     int printed = 0;
+    struct icli_command *it;
 
     if (argc > 1)
         return ICLI_ERR_ARG;
 
     icli_printf("Available commands:\n");
 
-    for (i = 0; i < icli.curr_cmd->n_cmds; i++) {
-        if (0 == argc || (strcmp(argv[0], icli.curr_cmd->cmds[i].name) == 0)) {
-            icli_printf("    %-*s : %s\n",
-                        icli.curr_cmd->max_name_len,
-                        icli.curr_cmd->cmds[i].name,
-                        icli.curr_cmd->cmds[i].doc);
+    LIST_FOREACH(it, &icli.curr_cmd->cmd_list, cmd_list_entry)
+    {
+        if (0 == argc || (strcmp(argv[0], it->name) == 0)) {
+            icli_printf("    %-*s : %s\n", icli.curr_cmd->max_name_len, it->name, it->doc);
             printed++;
         }
     }
@@ -459,14 +461,15 @@ static enum icli_ret icli_help(char *argv[], int argc, void *context UNUSED)
     if (!printed) {
         icli_err_printf("No commands match '%s'.  Possibilities are:\n", argv[0]);
 
-        for (i = 0; i < icli.curr_cmd->n_cmds; i++) {
+        LIST_FOREACH(it, &icli.curr_cmd->cmd_list, cmd_list_entry)
+        {
             /* Print in six columns. */
             if (printed == 6) {
                 printed = 0;
                 icli_err_printf("\n");
             }
 
-            icli_err_printf("%s\t", icli.curr_cmd->cmds[i].name);
+            icli_err_printf("%s\t", it->name);
             printed++;
         }
 
@@ -501,8 +504,10 @@ static int icli_init_default_cmds(struct icli_command *parent)
 
 static void icli_clean_command(struct icli_command *cmd)
 {
-    for (size_t i = 0; i < cmd->n_cmds; ++i) {
-        icli_clean_command(&cmd->cmds[i]);
+    while (!LIST_EMPTY(&cmd->cmd_list)) {
+        struct icli_command *it = LIST_FIRST(&cmd->cmd_list);
+        LIST_REMOVE(it, cmd_list_entry);
+        icli_clean_command(it);
     }
 
     free(cmd->name);
@@ -528,8 +533,7 @@ static void icli_clean_command(struct icli_command *cmd)
 
     cmd->argc = 0;
 
-    free(cmd->cmds);
-    cmd->cmds = NULL;
+    free(cmd);
 }
 
 int icli_register_commands(struct icli_command_params *params, int n_commands)
@@ -548,9 +552,8 @@ int icli_register_commands(struct icli_command_params *params, int n_commands)
 int icli_register_command(struct icli_command_params *params, struct icli_command **out_command)
 {
     bool need_end = true;
-    struct icli_command *parent;
+    struct icli_command *parent, *it;
     int ret = 0;
-    size_t cmd_idx;
 
     if (out_command)
         *out_command = NULL;
@@ -571,24 +574,23 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
 
     if (NULL == parent) {
         need_end = false;
-        parent = &icli.root_cmd;
+        parent = icli.root_cmd;
     }
 
-    for (size_t idx = 0; idx < parent->n_cmds; ++idx) {
-        if (strcmp(parent->cmds[idx].name, params->name) == 0) {
+    LIST_FOREACH(it, &parent->cmd_list, cmd_list_entry)
+    {
+        if (strcmp(it->name, params->name) == 0) {
             return -1;
         }
     }
 
-    cmd_idx = parent->n_cmds;
-    struct icli_command *new_cmds = realloc(parent->cmds, sizeof(struct icli_command) * (parent->n_cmds + 1));
-    if (NULL == new_cmds)
+    struct icli_command *cmd = malloc(sizeof(struct icli_command));
+    if (NULL == cmd)
         return -1;
 
-    parent->cmds = new_cmds;
-    struct icli_command *cmd = &parent->cmds[parent->n_cmds];
-
     memset(cmd, 0, sizeof(*cmd));
+
+    LIST_INIT(&cmd->cmd_list);
     cmd->name = strdup(params->name);
     cmd->name_len = (int)strlen(cmd->name);
     cmd->doc = strdup(params->help);
@@ -601,7 +603,6 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
     if (params->argv) {
         cmd->argv = calloc((size_t)cmd->argc, sizeof(struct icli_arg_val *));
         if (!cmd->argv) {
-            parent->cmds = realloc(parent->cmds, sizeof(struct icli_command) * (parent->n_cmds));
             ret = -1;
             icli_clean_command(cmd);
             goto out;
@@ -634,10 +635,10 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
         }
     }
 
-    ++parent->n_cmds; /* This must be after argv initialization */
-
     if (cmd->name_len > parent->max_name_len)
         parent->max_name_len = cmd->name_len;
+
+    ++parent->n_cmds;
 
     if (1 == parent->n_cmds && need_end) {
         struct icli_command_params param = {.parent = parent,
@@ -646,18 +647,22 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
                                             .help = "Exit to upper level"};
         ret = icli_register_command(&param, NULL);
         if (ret) {
+            --parent->n_cmds;
             icli_clean_command(cmd);
             goto out;
         }
         ret = icli_init_default_cmds(parent);
         if (ret) {
+            --parent->n_cmds;
             icli_clean_command(cmd);
             goto out;
         }
     }
 
+    LIST_INSERT_HEAD(&parent->cmd_list, cmd, cmd_list_entry);
+
     if (out_command)
-        *out_command = &parent->cmds[cmd_idx];
+        *out_command = cmd;
 
 out:
     return ret;
@@ -667,9 +672,14 @@ int icli_init(struct icli_params *params)
 {
     memset(&icli, 0, sizeof(icli));
 
+    icli.root_cmd = calloc(1, sizeof(struct icli_command));
+    if (!icli.root_cmd)
+        return -1;
+
     icli.user_data = params->user_data;
-    icli.curr_cmd = &icli.root_cmd;
+    icli.curr_cmd = icli.root_cmd;
     icli.prompt = strdup(params->prompt);
+    LIST_INIT(&icli.curr_cmd->cmd_list);
 
     /* Allow conditional parsing of the ~/.inputrc file. */
     rl_readline_name = strdup(params->app_name);
@@ -701,7 +711,7 @@ err:
 
 void icli_cleanup(void)
 {
-    icli_clean_command(&icli.root_cmd);
+    icli_clean_command(icli.root_cmd);
 
     rl_callback_handler_remove();
 
