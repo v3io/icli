@@ -70,6 +70,10 @@ struct icli {
     char *curr_prompt;
     const char *prompt;
 
+    int rows;
+    int cols;
+    int curr_row;
+
     struct icli_command *curr_completion_cmd;
     int curr_completion_arg;
 };
@@ -584,11 +588,9 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
         }
     }
 
-    struct icli_command *cmd = malloc(sizeof(struct icli_command));
+    struct icli_command *cmd = calloc(1, sizeof(struct icli_command));
     if (NULL == cmd)
         return -1;
-
-    memset(cmd, 0, sizeof(*cmd));
 
     LIST_INIT(&cmd->cmd_list);
     cmd->name = strdup(params->name);
@@ -689,6 +691,8 @@ int icli_init(struct icli_params *params)
     rl_completion_entry_function = icli_command_generator;
 
     stifle_history(params->history_size);
+
+    rl_get_screen_size(&icli.rows, &icli.cols);
 
     icli_build_prompt(icli.curr_cmd);
 
