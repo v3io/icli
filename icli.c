@@ -788,3 +788,72 @@ void icli_set_prompt(const char *prompt)
     icli.prompt = strdup(prompt);
     icli_build_prompt(icli.curr_cmd);
 }
+
+static int icli_print_command_to_dot(struct icli_command *cmd, FILE *out)
+{
+    struct icli_command *it;
+    int ret;
+
+    if (!LIST_EMPTY(&cmd->cmd_list)) {
+        if (cmd->name)
+            ret = fprintf(out, "\"%s\" -> { ", cmd->name);
+        else
+            ret = fprintf(out, "\"root\" -> { ");
+        if (ret < 0)
+            return ret;
+
+        LIST_FOREACH(it, &cmd->cmd_list, cmd_list_entry)
+        {
+            ret = fprintf(out, "\"%s\" ", it->name);
+            if (ret < 0)
+                return ret;
+        }
+
+        ret = fprintf(out, "};\n");
+        if (ret < 0)
+            return ret;
+    }
+
+    LIST_FOREACH(it, &cmd->cmd_list, cmd_list_entry)
+    {
+        ret = icli_print_command_to_dot(it, out);
+        if (ret < 0)
+            return ret;
+    }
+
+    return 0;
+}
+
+#define DOT_GRAPH_PREFIX "digraph {\n"
+#define DOT_GRAPH_POSTFIX "}\n"
+
+int icli_commands_to_dot(const char *fname)
+{
+    int ret = 0;
+    size_t written;
+    FILE *out = fopen(fname, "w");
+    if (!out) {
+        return -1;
+    }
+
+    written = fwrite(DOT_GRAPH_PREFIX, sizeof(DOT_GRAPH_PREFIX) - 1, 1, out);
+    if (written != 1) {
+        ret = -1;
+        goto out;
+    }
+
+    ret = icli_print_command_to_dot(icli.root_cmd, out);
+    if (ret)
+        goto out;
+
+    written = fwrite(DOT_GRAPH_POSTFIX, sizeof(DOT_GRAPH_POSTFIX) - 1, 1, out);
+    if (written != 1) {
+        ret = -1;
+        goto out;
+    }
+
+out:
+    fclose(out);
+
+    return ret;
+}

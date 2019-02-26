@@ -206,6 +206,8 @@ int main(int argc, char *argv[])
         goto out;
     }
 
+    icli_commands_to_dot("cli.dot");
+
     icli_run();
 
 out:

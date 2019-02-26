@@ -132,3 +132,10 @@ void icli_err_printf(const char *format, ...) __attribute__((__format__(__printf
  * @param prompt the new string
  */
 void icli_set_prompt(const char *prompt);
+
+/**
+ * Output graph of commands in dot format to a file
+ * @param fname file name to write to (will be truncated if exists
+ * @return 0 on success, -1 on error
+ */
+int icli_commands_to_dot(const char *fname);
