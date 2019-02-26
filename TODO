@@ -1,5 +1,4 @@
 * Add support for grep
-* Add support for more while printing (rl_get_screen_size)
 * Add ability to run full commands in a single line
 * Add support for running commands from file
-
+* Add support for on command/error/print hooks - for example for logging
