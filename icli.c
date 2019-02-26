@@ -59,6 +59,7 @@ struct icli_command {
     struct icli_arg_val **argv;
     int max_name_len;
     int name_len;
+    char *prompt_line;
 };
 
 struct icli {
@@ -128,10 +129,14 @@ static void icli_cat_command(struct icli_command *curr)
 
     if (curr->name) {
         strcat(icli.curr_prompt, "(");
-        if (curr->short_name)
+
+        if (curr->prompt_line) {
+            strcat(icli.curr_prompt, curr->prompt_line);
+        } else if (curr->short_name) {
             strcat(icli.curr_prompt, curr->short_name);
-        else
+        } else if (curr->name) {
             strcat(icli.curr_prompt, curr->name);
+        }
         strcat(icli.curr_prompt, ")");
     }
 }
@@ -143,7 +148,10 @@ static void icli_build_prompt(struct icli_command *command)
 
     struct icli_command *curr = command;
     while (curr) {
-        if (curr->short_name) {
+        if (curr->prompt_line) {
+            /*command + '(' + ')' */
+            buf_sz += 2 + strlen(curr->prompt_line);
+        } else if (curr->short_name) {
             /*command + '(' + ')' */
             buf_sz += 2 + strlen(curr->short_name);
         } else if (curr->name) {
@@ -198,6 +206,39 @@ static int icli_parse_line(char *line, char **cmd, char *argv[], int argc)
     }
 
     return n_args;
+}
+
+static int icli_set_command_prompt(struct icli_command *cmd, char *argv[], int argc)
+{
+    size_t bufsz = 1;
+    const char *name = NULL;
+
+    free(cmd->prompt_line);
+    cmd->prompt_line = NULL;
+
+    if (cmd->short_name) {
+        bufsz += strlen(cmd->short_name);
+        name = cmd->short_name;
+    } else if (cmd->name) {
+        bufsz += strlen(cmd->name);
+        name = cmd->name;
+    }
+
+    for (int i = 0; i < argc; ++i) {
+        bufsz += strlen(argv[i]) + 1;
+    }
+
+    cmd->prompt_line = malloc(bufsz);
+    if (!cmd->prompt_line)
+        return -1;
+
+    strcpy(cmd->prompt_line, name);
+    for (int i = 0; i < argc; ++i) {
+        strcat(cmd->prompt_line, " ");
+        strcat(cmd->prompt_line, argv[i]);
+    }
+
+    return 0;
 }
 
 static int icli_execute_line(char *line)
@@ -270,6 +311,8 @@ static int icli_execute_line(char *line)
             }
         }
 
+        icli_set_command_prompt(command, argv, argc);
+
         /* Call the function. */
         enum icli_ret ret = ((*(command->func))(argv, argc, icli.user_data));
 
@@ -278,10 +321,14 @@ static int icli_execute_line(char *line)
             break;
         case ICLI_ERR_ARG:
             icli_err_printf("Argument error\n");
+            free(command->prompt_line);
+            command->prompt_line = NULL;
             return -1;
             break;
         case ICLI_ERR:
             icli_err_printf("Error\n");
+            free(command->prompt_line);
+            command->prompt_line = NULL;
             return -1;
             break;
         }
@@ -520,6 +567,8 @@ static void icli_clean_command(struct icli_command *cmd)
     cmd->short_name = NULL;
     free(cmd->doc);
     cmd->doc = NULL;
+    free(cmd->prompt_line);
+    cmd->prompt_line = NULL;
 
     if (cmd->argc && cmd->argv) {
         for (int j = 0; j < cmd->argc; ++j) {

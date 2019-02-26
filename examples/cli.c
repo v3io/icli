@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    struct icli_command *containers, *services, *jobs;
+    struct icli_command *containers, *services, *jobs, *interface;
     struct icli_command_params param = {.name = "containers", .help = "Containers"};
 
     struct icli_arg_val show_first_arg[] = {{.val = "containers"}, {.val = "services"}, {.val = NULL}};
@@ -159,8 +159,21 @@ int main(int argc, char *argv[])
     memset(&param, 0, sizeof(param));
     param.help = "Set interface";
     param.name = "interface";
+    param.short_name = "intf";
     param.command = cli_interface;
     param.argc = 1;
+
+    res = icli_register_command(&param, &interface);
+    if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
+        ret = EXIT_FAILURE;
+        goto out;
+    }
+
+    memset(&param, 0, sizeof(param));
+    param.parent = interface;
+    param.help = "IPs";
+    param.name = "ip";
 
     res = icli_register_command(&param, NULL);
     if (res) {
