@@ -29,7 +29,8 @@ struct my_context {
 
 static enum icli_ret cli_list_jobs(char *argv[], int argc, void *context)
 {
-    icli_printf("Jobs: %d\n", 123);
+    for (int i = 1; i < 200; ++i)
+        icli_printf("Jobs: %d\n", i);
 
     return ICLI_OK;
 }

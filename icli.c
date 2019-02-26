@@ -31,6 +31,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <sys/queue.h>
+#include <termios.h>
 
 #include <editline/readline.h>
 
@@ -74,6 +75,7 @@ struct icli {
     int rows;
     int cols;
     int curr_row;
+    bool skip_output;
 
     struct icli_command *curr_completion_cmd;
     int curr_completion_arg;
@@ -313,8 +315,12 @@ static int icli_execute_line(char *line)
 
         icli_set_command_prompt(command, argv, argc);
 
+        icli.curr_row = 0;
+
         /* Call the function. */
         enum icli_ret ret = ((*(command->func))(argv, argc, icli.user_data));
+
+        icli.skip_output = false;
 
         switch (ret) {
         case ICLI_OK:
@@ -811,9 +817,58 @@ void icli_run(void)
     }
 }
 
+static int getch(void)
+{
+    struct termios orig_term, new_term;
+    int res;
+
+    tcgetattr(0, &orig_term);
+    new_term = orig_term;
+
+    new_term.c_lflag &= (tcflag_t)(~(ICANON | ECHO));
+    tcsetattr(0, TCSANOW, &new_term);
+
+    res = getchar();
+
+    tcsetattr(0, TCSANOW, &orig_term);
+
+    return res;
+}
+
+#define MORE_STRING "--More--"
+
+static void icli_handle_print_line(void)
+{
+    size_t i;
+
+    if (icli.skip_output)
+        return;
+
+    if (icli.curr_row == icli.rows - 2) {
+        printf(MORE_STRING);
+        int c = getch();
+        if ('q' == c)
+            icli.skip_output = true;
+        for (i = 0; i < sizeof(MORE_STRING); ++i)
+            printf("\r");
+        for (i = 0; i < sizeof(MORE_STRING); ++i)
+            printf(" ");
+        for (i = 0; i < sizeof(MORE_STRING); ++i)
+            printf("\r");
+        icli.curr_row = 0;
+    } else {
+        ++icli.curr_row;
+    }
+}
+
 void icli_printf(const char *format, ...)
 {
     va_list args;
+
+    icli_handle_print_line();
+
+    if (icli.skip_output)
+        return;
 
     va_start(args, format);
     vprintf(format, args);
@@ -823,6 +878,11 @@ void icli_printf(const char *format, ...)
 void icli_err_printf(const char *format, ...)
 {
     va_list args;
+
+    icli_handle_print_line();
+
+    if (icli.skip_output)
+        return;
 
     printf(ANSI_RED_NORMAL);
     va_start(args, format);
