@@ -77,6 +77,8 @@ struct icli {
     int curr_row;
     bool skip_output;
 
+    bool error_printed;
+
     struct icli_command *curr_completion_cmd;
     int curr_completion_arg;
 };
@@ -316,6 +318,7 @@ static int icli_execute_line(char *line)
         icli_set_command_prompt(command, argv, argc);
 
         icli.curr_row = 0;
+        icli.error_printed = false;
 
         /* Call the function. */
         enum icli_ret ret = ((*(command->func))(argv, argc, icli.user_data));
@@ -326,13 +329,15 @@ static int icli_execute_line(char *line)
         case ICLI_OK:
             break;
         case ICLI_ERR_ARG:
-            icli_err_printf("Argument error\n");
+            if (!icli.error_printed)
+                icli_err_printf("Argument error\n");
             free(command->prompt_line);
             command->prompt_line = NULL;
             return -1;
             break;
         case ICLI_ERR:
-            icli_err_printf("Error\n");
+            if (!icli.error_printed)
+                icli_err_printf("Error\n");
             free(command->prompt_line);
             command->prompt_line = NULL;
             return -1;
@@ -878,6 +883,8 @@ void icli_printf(const char *format, ...)
 void icli_err_printf(const char *format, ...)
 {
     va_list args;
+
+    icli.error_printed = true;
 
     icli_handle_print_line();
 
