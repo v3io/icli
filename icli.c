@@ -602,6 +602,23 @@ static int icli_init_default_cmds(struct icli_command *parent)
     return ret;
 }
 
+static void icli_clean_command_argv(struct icli_command *cmd)
+{
+    if (cmd->argc && cmd->argv) {
+        for (int j = 0; j < cmd->argc; ++j) {
+            for (struct icli_arg_val *val = cmd->argv[j]; val && val->val; ++val) {
+                free((void *)val->val);
+                val->val = NULL;
+            }
+            free(cmd->argv[j]);
+            cmd->argv[j] = NULL;
+        }
+
+        free(cmd->argv);
+        cmd->argv = NULL;
+    }
+}
+
 static void icli_clean_command(struct icli_command *cmd)
 {
     while (!LIST_EMPTY(&cmd->cmd_list)) {
@@ -619,19 +636,7 @@ static void icli_clean_command(struct icli_command *cmd)
     free(cmd->prompt_line);
     cmd->prompt_line = NULL;
 
-    if (cmd->argc && cmd->argv) {
-        for (int j = 0; j < cmd->argc; ++j) {
-            for (struct icli_arg_val *val = cmd->argv[j]; val && val->val; ++val) {
-                free((void *)val->val);
-                val->val = NULL;
-            }
-            free(cmd->argv[j]);
-            cmd->argv[j] = NULL;
-        }
-
-        free(cmd->argv);
-        cmd->argv = NULL;
-    }
+    icli_clean_command_argv(cmd);
 
     cmd->argc = 0;
 
@@ -651,6 +656,46 @@ int icli_register_commands(struct icli_command_params *params, struct icli_comma
             return ret;
     }
 
+    return ret;
+}
+
+static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg_val **argv)
+{
+    int ret = 0;
+
+    if (argv) {
+        cmd->argv = calloc((size_t)cmd->argc, sizeof(struct icli_arg_val *));
+        if (!cmd->argv) {
+            ret = -1;
+            goto out;
+        }
+
+        for (int i = 0; i < cmd->argc; ++i) {
+            int n_vals = 0;
+            for (struct icli_arg_val *val = argv[i]; val && val->val; ++val, ++n_vals)
+                ;
+
+            if (n_vals) {
+                struct icli_arg_val *vals = calloc((size_t)(n_vals + 1), sizeof(struct icli_arg_val));
+                if (!vals) {
+                    ret = -1;
+                    goto out;
+                }
+
+                cmd->argv[i] = vals;
+
+                for (int j = 0; argv[i][j].val; ++j) {
+                    vals[j].val = strdup(argv[i][j].val);
+                    if (!vals[j].val) {
+                        ret = -1;
+                        goto out;
+                    }
+                }
+            }
+        }
+    }
+
+out:
     return ret;
 }
 
@@ -703,39 +748,10 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
     if (params->short_name)
         cmd->short_name = strdup(params->short_name);
 
-    if (params->argv) {
-        cmd->argv = calloc((size_t)cmd->argc, sizeof(struct icli_arg_val *));
-        if (!cmd->argv) {
-            ret = -1;
-            icli_clean_command(cmd);
-            goto out;
-        }
-
-        for (int i = 0; i < cmd->argc; ++i) {
-            int n_vals = 0;
-            for (struct icli_arg_val *val = params->argv[i]; val && val->val; ++val, ++n_vals)
-                ;
-
-            if (n_vals) {
-                struct icli_arg_val *vals = calloc((size_t)(n_vals + 1), sizeof(struct icli_arg_val));
-                if (!vals) {
-                    ret = -1;
-                    icli_clean_command(cmd);
-                    goto out;
-                }
-
-                cmd->argv[i] = vals;
-
-                for (int j = 0; params->argv[i][j].val; ++j) {
-                    vals[j].val = strdup(params->argv[i][j].val);
-                    if (!vals[j].val) {
-                        ret = -1;
-                        icli_clean_command(cmd);
-                        goto out;
-                    }
-                }
-            }
-        }
+    ret = icli_init_command_argv(cmd, params->argv);
+    if (ret) {
+        icli_clean_command(cmd);
+        goto out;
     }
 
     if (cmd->name_len > parent->max_name_len)
@@ -1047,4 +1063,13 @@ out:
     fclose(out);
 
     return ret;
+}
+
+int icli_reset_arguments(struct icli_command *cmd, struct icli_arg_val **argv)
+{
+    if (0 == cmd->argc || cmd->argc == ICLI_ARGS_DYNAMIC)
+        return -1;
+
+    icli_clean_command_argv(cmd);
+    return icli_init_command_argv(cmd, argv);
 }

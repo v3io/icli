@@ -162,3 +162,11 @@ int icli_commands_to_dot(const char *fname);
  * @return 0 on success, -1 on error
  */
 int icli_execute_line(char *line);
+
+/**
+ * Set new argument values for a command. This assumes argc was set correctly for this command before
+ * @param cmd the command to modify
+ * @param argv new values. for explanation @see icli_command_params()
+ * @return 0 on success, -1 on error
+ */
+int icli_reset_arguments(struct icli_command *cmd, struct icli_arg_val **argv);
