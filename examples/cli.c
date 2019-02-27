@@ -25,6 +25,7 @@
 
 struct my_context {
     int something;
+    FILE *log;
 };
 
 static enum icli_ret cli_list_jobs(char *argv[], int argc, void *context)
@@ -100,16 +101,51 @@ static enum icli_ret cli_show(char *argv[], int argc, void *context)
     return ICLI_OK;
 }
 
+static void cli_cmd_hook(const char *cmd, char *argv[], int argc, void *context)
+{
+    struct my_context *self = context;
+    fprintf(self->log, "CMD: %s", cmd);
+
+    for (int i = 0; i < argc; ++i) {
+        fprintf(self->log, " %s", argv[i]);
+    }
+    fprintf(self->log, "\n");
+}
+
+static void cli_out_hook(const char *format, va_list args, void *context)
+{
+    struct my_context *self = context;
+
+    vfprintf(self->log, format, args);
+}
+
+static void cli_err_hook(const char *format, va_list args, void *context)
+{
+    struct my_context *self = context;
+    fprintf(self->log, "ERR:");
+
+    vfprintf(self->log, format, args);
+}
+
 int main(int argc, char *argv[])
 {
     int res;
     int ret = EXIT_SUCCESS;
-    struct my_context context = {};
+
+    struct my_context context = {.log = fopen("./cli.log", "w")};
+
+    if (NULL == context.log) {
+        fprintf(stderr, "Unable to open log file:%m\n");
+        return EXIT_FAILURE;
+    }
 
     struct icli_params params = {.user_data = &context,
                                  .history_size = 10,
                                  .app_name = "example_cli",
-                                 .prompt = "my_cli"};
+                                 .prompt = "my_cli",
+                                 .cmd_hook = cli_cmd_hook,
+                                 .out_hook = cli_out_hook,
+                                 .err_hook = cli_err_hook};
 
     res = icli_init(&params);
     if (res) {

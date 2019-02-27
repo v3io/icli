@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <stdarg.h>
+
 /**
  * @file
  * @brief icli API
@@ -36,6 +38,16 @@
 #define ICLI_ARGS_DYNAMIC (-1)
 
 /**
+ * Command hook callback
+ */
+typedef void (*icli_cmd_hook_t)(const char *, char *[], int, void *);
+
+/**
+ * Output hook callback
+ */
+typedef void (*icli_output_hook_t)(const char *, va_list, void *);
+
+/**
  * Structure to initialize the library instance
  * Note that library instance is global per process (readline limitation)
  */
@@ -44,6 +56,9 @@ struct icli_params {
     int history_size; /**< how many commands to keep in history */
     const char *app_name; /**< name of application for interfacing ~/.inputrc */
     const char *prompt; /**< prompt string (will be post-fixed by "> " */
+    icli_cmd_hook_t cmd_hook; /**< hook to be called before command is executed */
+    icli_output_hook_t out_hook; /**< hook to be called when there is output */
+    icli_output_hook_t err_hook; /**< hook to be called when there is error print */
 };
 
 /**
@@ -56,7 +71,7 @@ struct icli_command;
 /**
  * Command callback function
  */
-typedef enum icli_ret icli_cmd_func_t(char *[], int, void *);
+typedef enum icli_ret (*icli_cmd_func_t)(char *[], int, void *);
 
 /**
  * Argument value
@@ -72,7 +87,7 @@ struct icli_command_params {
     struct icli_command *parent; /**< parent of the command - root command if NULL is provided */
     const char *name; /**< name of the command - can't be NULL, or empty string */
     const char *short_name; /**< short version to be displayed in prompt */
-    icli_cmd_func_t *command; /**< the callback to call - if NULL is passed, command will not accept arguments */
+    icli_cmd_func_t command; /**< the callback to call - if NULL is passed, command will not accept arguments */
     const char *help; /**< help string for the command - can't be NULL, or empty string */
     int argc; /**< number of arguments to the command @see #ICLI_ARGS_DYNAMIC */
     /** Argument value that are acceptable at each position. NULL means no validation on argument in array. argv can be

@@ -28,7 +28,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <assert.h>
 #include <sys/queue.h>
 #include <termios.h>
@@ -51,7 +50,7 @@ struct icli_command {
     LIST_ENTRY(icli_command) cmd_list_entry;
     char *name; /* User printable name of the function. */
     char *short_name;
-    icli_cmd_func_t *func; /* Function to call to do the job. */
+    icli_cmd_func_t func; /* Function to call to do the job. */
     char *doc; /* Documentation for this function.  */
     LIST_HEAD(, icli_command) cmd_list;
     size_t n_cmds;
@@ -82,6 +81,10 @@ struct icli {
 
     struct icli_command *curr_completion_cmd;
     int curr_completion_arg;
+
+    icli_cmd_hook_t cmd_hook;
+    icli_output_hook_t out_hook;
+    icli_output_hook_t err_hook;
 };
 
 static struct icli icli;
@@ -321,8 +324,11 @@ int icli_execute_line(char *line)
         icli.curr_row = 0;
         icli.error_printed = false;
 
+        if (icli.cmd_hook)
+            icli.cmd_hook(command->name, argv, argc, icli.user_data);
+
         /* Call the function. */
-        enum icli_ret ret = ((*(command->func))(argv, argc, icli.user_data));
+        enum icli_ret ret = command->func(argv, argc, icli.user_data);
 
         icli.skip_output = false;
 
@@ -344,6 +350,9 @@ int icli_execute_line(char *line)
             return -1;
             break;
         }
+    } else {
+        if (icli.cmd_hook)
+            icli.cmd_hook(command->name, argv, argc, icli.user_data);
     }
 
     if (command->n_cmds) {
@@ -783,6 +792,10 @@ int icli_init(struct icli_params *params)
 
     icli.prompt = strdup(params->prompt);
 
+    icli.cmd_hook = params->cmd_hook;
+    icli.out_hook = params->out_hook;
+    icli.err_hook = params->err_hook;
+
     /* Allow conditional parsing of the ~/.inputrc file. */
     rl_readline_name = strdup(params->app_name);
 
@@ -911,6 +924,7 @@ static void icli_handle_print_line(void)
 void icli_printf(const char *format, ...)
 {
     va_list args;
+    va_list args_hook;
 
     icli_handle_print_line();
 
@@ -918,6 +932,13 @@ void icli_printf(const char *format, ...)
         return;
 
     va_start(args, format);
+
+    if (icli.out_hook) {
+        va_copy(args_hook, args);
+        icli.out_hook(format, args_hook, icli.user_data);
+        va_end(args_hook);
+    }
+
     vprintf(format, args);
     va_end(args);
 }
@@ -925,6 +946,7 @@ void icli_printf(const char *format, ...)
 void icli_err_printf(const char *format, ...)
 {
     va_list args;
+    va_list args_hook;
 
     icli.error_printed = true;
 
@@ -935,6 +957,13 @@ void icli_err_printf(const char *format, ...)
 
     printf(ANSI_RED_NORMAL);
     va_start(args, format);
+
+    if (icli.err_hook) {
+        va_copy(args_hook, args);
+        icli.err_hook(format, args_hook, icli.user_data);
+        va_end(args_hook);
+    }
+
     vprintf(format, args);
     va_end(args);
     printf(ANSI_RESET);
