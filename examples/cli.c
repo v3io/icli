@@ -156,7 +156,9 @@ int main(int argc, char *argv[])
     struct icli_command *containers, *services, *jobs, *interface;
     struct icli_command_params param = {.name = "containers", .help = "Containers"};
 
-    struct icli_arg_val show_first_arg[] = {{.val = "containers"}, {.val = "services"}, {.val = NULL}};
+    struct icli_arg_val show_first_arg[] = {{.type = AT_Val, .val = "containers"},
+                                            {.type = AT_Val, .val = "services"},
+                                            {}};
     struct icli_arg_val *show_args[] = {show_first_arg};
 
     res = icli_register_command(&param, &containers);
