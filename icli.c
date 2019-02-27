@@ -61,6 +61,7 @@ struct icli_command {
     int max_name_len;
     int name_len;
     char *prompt_line;
+    bool internal;
 };
 
 struct icli {
@@ -561,7 +562,17 @@ static int icli_init_default_cmds(struct icli_command *parent)
           .command = icli_history,
           .help = "Show a list of previously run commands"}};
 
-    return icli_register_commands(params, array_len(params));
+    struct icli_command *out_commands[array_len(params)];
+
+    int ret = icli_register_commands(params, out_commands, array_len(params));
+    if (ret)
+        return ret;
+
+    for (size_t i = 0; i < array_len(params); ++i) {
+        out_commands[i]->internal = true;
+    }
+
+    return ret;
 }
 
 static void icli_clean_command(struct icli_command *cmd)
@@ -600,12 +611,15 @@ static void icli_clean_command(struct icli_command *cmd)
     free(cmd);
 }
 
-int icli_register_commands(struct icli_command_params *params, int n_commands)
+int icli_register_commands(struct icli_command_params *params, struct icli_command *out_commads[], int n_commands)
 {
     int ret = 0;
 
     for (int i = 0; i < n_commands; ++i) {
-        ret = icli_register_command(&params[i], NULL);
+        if (out_commads)
+            ret = icli_register_command(&params[i], &out_commads[i]);
+        else
+            ret = icli_register_command(&params[i], NULL);
         if (ret)
             return ret;
     }
@@ -703,16 +717,19 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
     ++parent->n_cmds;
 
     if (1 == parent->n_cmds && need_end) {
+        struct icli_command *end;
         struct icli_command_params param = {.parent = parent,
                                             .name = "end",
                                             .command = icli_end,
                                             .help = "Exit to upper level"};
-        ret = icli_register_command(&param, NULL);
+        ret = icli_register_command(&param, &end);
         if (ret) {
             --parent->n_cmds;
             icli_clean_command(cmd);
             goto out;
         }
+        end->internal = true;
+
         ret = icli_init_default_cmds(parent);
         if (ret) {
             --parent->n_cmds;
@@ -738,10 +755,14 @@ int icli_init(struct icli_params *params)
     if (!icli.root_cmd)
         return -1;
 
-    icli.user_data = params->user_data;
+    LIST_INIT(&icli.root_cmd->cmd_list);
+    icli.root_cmd->internal = true;
+
     icli.curr_cmd = icli.root_cmd;
+
+    icli.user_data = params->user_data;
+
     icli.prompt = strdup(params->prompt);
-    LIST_INIT(&icli.curr_cmd->cmd_list);
 
     /* Allow conditional parsing of the ~/.inputrc file. */
     rl_readline_name = strdup(params->app_name);
@@ -757,11 +778,13 @@ int icli_init(struct icli_params *params)
 
     icli_build_prompt(icli.curr_cmd);
 
+    struct icli_command *quit;
     struct icli_command_params param = {.name = "quit", .command = icli_quit, .help = "Quit interactive shell"};
-    int ret = icli_register_command(&param, NULL);
+    int ret = icli_register_command(&param, &quit);
     if (ret) {
         goto err;
     }
+    quit->internal = true;
 
     ret = icli_init_default_cmds(NULL);
     if (ret) {
@@ -920,9 +943,11 @@ static int icli_print_command_to_dot(struct icli_command *cmd, FILE *out)
 
         LIST_FOREACH(it, &cmd->cmd_list, cmd_list_entry)
         {
-            ret = fprintf(out, "\"%s\" ", it->name);
-            if (ret < 0)
-                return ret;
+            if (!it->internal) {
+                ret = fprintf(out, "\"%s\" ", it->name);
+                if (ret < 0)
+                    return ret;
+            }
         }
 
         ret = fprintf(out, "};\n");
@@ -932,9 +957,11 @@ static int icli_print_command_to_dot(struct icli_command *cmd, FILE *out)
 
     LIST_FOREACH(it, &cmd->cmd_list, cmd_list_entry)
     {
-        ret = icli_print_command_to_dot(it, out);
-        if (ret < 0)
-            return ret;
+        if (!it->internal) {
+            ret = icli_print_command_to_dot(it, out);
+            if (ret < 0)
+                return ret;
+        }
     }
 
     return 0;

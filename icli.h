@@ -100,7 +100,7 @@ void icli_run(void);
 /**
  * Register new command
  * @param params params to initialize with @see icli_command_params()
- * @param[out] out_command where to store resulting command - can be NULL
+ * @param[out] out_command where to store resulting command (can be NULL)
  * @return 0 on success, !0 on error
  */
 int icli_register_command(struct icli_command_params *params, struct icli_command **out_command);
@@ -108,10 +108,11 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
 /**
  * Register number of commands
  * @param params the parameter of each command
+ * @param out_commads output of resulting commands (can be NULL)
  * @param n_commands number of commands
  * @return @see icli_register_command()
  */
-int icli_register_commands(struct icli_command_params *params, int n_commands);
+int icli_register_commands(struct icli_command_params *params, struct icli_command *out_commads[], int n_commands);
 
 /**
  * Print output to user. This must be used instead of printf
