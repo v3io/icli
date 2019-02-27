@@ -287,8 +287,8 @@ int icli_execute_line(char *line)
                     if (!vals)
                         continue;
 
-                    while (vals->type != AT_None) {
-                        if (AT_Val == vals->type && strcmp(vals->val, argv[i]) == 0) {
+                    while (vals->val) {
+                        if (strcmp(vals->val, argv[i]) == 0) {
                             found = true;
                             break;
                         }
@@ -299,17 +299,15 @@ int icli_execute_line(char *line)
                         icli_err_printf("Command %s %d argument invalid: %s. Possible values:\n", cmd, i, argv[i]);
 
                         int printed = 0;
-                        for (vals = command->argv[i]; vals->type != AT_None; ++vals) {
-                            if (AT_Val == vals->type) {
-                                /* Print in six columns. */
-                                if (printed == 6) {
-                                    printed = 0;
-                                    icli_err_printf("\n");
-                                }
-
-                                icli_err_printf("%s\t", vals->val);
-                                printed++;
+                        for (vals = command->argv[i]; vals->val; ++vals) {
+                            /* Print in six columns. */
+                            if (printed == 6) {
+                                printed = 0;
+                                icli_err_printf("\n");
                             }
+
+                            icli_err_printf("%s\t", vals->val);
+                            printed++;
                         }
 
                         if (printed)
@@ -391,10 +389,7 @@ static char *icli_command_arg_generator(const char *text, int state)
 
     /* Return the next name which partially matches from the
        argument list. */
-    while (vals && vals->type != AT_None) {
-        if (vals->type != AT_Val)
-            continue;
-
+    while (vals && vals->val) {
         name = vals->val;
 
         ++vals;
@@ -611,7 +606,7 @@ static void icli_clean_command_argv(struct icli_command *cmd)
 {
     if (cmd->argc && cmd->argv) {
         for (int j = 0; j < cmd->argc; ++j) {
-            for (struct icli_arg_val *val = cmd->argv[j]; val && val->type != AT_None; ++val) {
+            for (struct icli_arg_val *val = cmd->argv[j]; val && val->val; ++val) {
                 free((void *)val->val);
                 val->val = NULL;
             }
@@ -677,7 +672,7 @@ static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg_val 
 
         for (int i = 0; i < cmd->argc; ++i) {
             int n_vals = 0;
-            for (struct icli_arg_val *val = argv[i]; val && val->type != AT_None; ++val, ++n_vals)
+            for (struct icli_arg_val *val = argv[i]; val && val->val; ++val, ++n_vals)
                 ;
 
             if (n_vals) {
@@ -689,18 +684,11 @@ static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg_val 
 
                 cmd->argv[i] = vals;
 
-                for (int j = 0; argv[i][j].type != AT_None; ++j) {
-                    vals[j].type = argv[i][j].type;
-                    switch (vals[j].type) {
-                    case AT_Val:
-                        vals[j].val = strdup(argv[i][j].val);
-                        if (!vals[j].val) {
-                            ret = -1;
-                            goto out;
-                        }
-                        break;
-                    default:
-                        break;
+                for (int j = 0; argv[i][j].val; ++j) {
+                    vals[j].val = strdup(argv[i][j].val);
+                    if (!vals[j].val) {
+                        ret = -1;
+                        goto out;
                     }
                 }
             }

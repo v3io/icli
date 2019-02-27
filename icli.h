@@ -74,18 +74,10 @@ struct icli_command;
 typedef enum icli_ret (*icli_cmd_func_t)(char *[], int, void *);
 
 /**
- * Argument type
- */
-enum icli_arg_type { AT_None, AT_Val, AT_File };
-
-/**
  * Argument value
  */
 struct icli_arg_val {
-    enum icli_arg_type type; /**< Type of value */
-    union {
-        const char *val; /**< Actual value */
-    };
+    const char *val; /**< Actual value */
 };
 
 /**
