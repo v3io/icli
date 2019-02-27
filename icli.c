@@ -246,7 +246,7 @@ static int icli_set_command_prompt(struct icli_command *cmd, char *argv[], int a
     return 0;
 }
 
-static int icli_execute_line(char *line)
+int icli_execute_line(char *line)
 {
     struct icli_command *command;
     static char *argv[ICLI_ARGS_MAX];

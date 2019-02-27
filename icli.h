@@ -140,3 +140,10 @@ void icli_set_prompt(const char *prompt);
  * @return 0 on success, -1 on error
  */
 int icli_commands_to_dot(const char *fname);
+
+/**
+ * Execute arbitrary command
+ * @param line the line to execute
+ * @return 0 on success, -1 on error
+ */
+int icli_execute_line(char *line);
