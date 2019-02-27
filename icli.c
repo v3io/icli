@@ -488,12 +488,30 @@ static enum icli_ret icli_history(char *argv[] UNUSED, int argc UNUSED, void *co
     return ICLI_OK;
 }
 
-static enum icli_ret icli_end(char *argv[] UNUSED, int argc UNUSED, void *context UNUSED)
+static enum icli_ret icli_end(char *argv[], int argc, void *context UNUSED)
 {
-    icli.curr_cmd = icli.curr_cmd->parent;
+    if (argc > 1) {
+        icli_err_printf("end supports either 0 or 1 numeric argument\n");
+        return ICLI_ERR_ARG;
+    }
 
-    if (NULL == icli.curr_cmd) {
-        icli.curr_cmd = icli.root_cmd;
+    int level = 1;
+
+    if (1 == argc) {
+        level = atoi(argv[0]);
+        if (0 == level) {
+            icli_err_printf("end argument must be a positive integer value\n");
+            return ICLI_ERR_ARG;
+        }
+    }
+
+    for (int i = 0; i < level; ++i) {
+        icli.curr_cmd = icli.curr_cmd->parent;
+
+        if (NULL == icli.curr_cmd) {
+            icli.curr_cmd = icli.root_cmd;
+            break;
+        }
     }
 
     icli_build_prompt(icli.curr_cmd);
@@ -555,7 +573,7 @@ static int icli_init_default_cmds(struct icli_command *parent)
           .name = "help",
           .command = icli_help,
           .argc = ICLI_ARGS_DYNAMIC,
-          .help = "Show available commands or show help of a specific command"},
+          .help = "Show available commands or show help of a specific command. args: [command]"},
          {.parent = parent, .name = "?", .command = icli_help, .argc = ICLI_ARGS_DYNAMIC, .help = "Synonym for 'help'"},
          {.parent = parent,
           .name = "history",
@@ -721,7 +739,8 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
         struct icli_command_params param = {.parent = parent,
                                             .name = "end",
                                             .command = icli_end,
-                                            .help = "Exit to upper level"};
+                                            .argc = ICLI_ARGS_DYNAMIC,
+                                            .help = "Exit to upper level. args: [number of levels]"};
         ret = icli_register_command(&param, &end);
         if (ret) {
             --parent->n_cmds;
