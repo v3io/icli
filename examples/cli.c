@@ -261,6 +261,7 @@ int main(int argc, char *argv[])
     icli_run();
 
 out:
+    fclose(context.log);
     icli_cleanup();
 
     return ret;
