@@ -93,6 +93,8 @@ static struct icli icli;
 
 #define UNUSED __attribute__((__unused__))
 
+void icli_api_printf(const char *format, ...) __attribute__((__format__(__printf__, 1, 2)));
+
 /* Strip whitespace from the start and end of STRING.  Return a pointer
    into STRING. */
 static char *stripwhite(char *string)
@@ -111,6 +113,16 @@ static char *stripwhite(char *string)
     *++t = '\0';
 
     return s;
+}
+
+void icli_api_printf(const char *format, ...)
+{
+    va_list args;
+
+    printf("ERR: ");
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
 }
 
 /* Look up NAME as the name of a command, and return a pointer to that
@@ -672,6 +684,7 @@ static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg_val 
     if (argv) {
         cmd->argv = calloc((size_t)cmd->argc, sizeof(struct icli_arg_val *));
         if (!cmd->argv) {
+            icli_api_printf("Unable to allocate memory for argv in command:%s\n", cmd->name);
             ret = -1;
             goto out;
         }
@@ -684,6 +697,9 @@ static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg_val 
             if (n_vals) {
                 struct icli_arg_val *vals = calloc((size_t)(n_vals + 1), sizeof(struct icli_arg_val));
                 if (!vals) {
+                    icli_api_printf("Unable to allocate memory for vals of size %d in command:%s\n",
+                                    n_vals + 1,
+                                    cmd->name);
                     ret = -1;
                     goto out;
                 }
@@ -693,12 +709,19 @@ static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg_val 
                 for (int j = 0; argv[i][j].val; ++j) {
                     vals[j].val = strdup(argv[i][j].val);
                     if (!vals[j].val) {
+                        icli_api_printf("Unable to allocate memory for val %s in command:%s\n",
+                                        argv[i][j].val,
+                                        cmd->name);
                         ret = -1;
                         goto out;
                     }
                     if (argv[i][j].help) {
                         vals[j].help = strdup(argv[i][j].help);
                         if (!vals[j].help) {
+                            icli_api_printf("Unable to allocate memory for val %s help %s in command:%s\n",
+                                            argv[i][j].val,
+                                            argv[i][j].help,
+                                            cmd->name);
                             ret = -1;
                             goto out;
                         }
@@ -721,17 +744,25 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
     if (out_command)
         *out_command = NULL;
 
-    if (!params)
+    if (!params) {
+        icli_api_printf("NULL params specified\n");
         return -1;
+    }
 
-    if (!params->name || !(*params->name) || !params->help || !(*params->help))
+    if (!params->name || !(*params->name) || !params->help || !(*params->help)) {
+        icli_api_printf("name or help argument not provided\n");
         return -1;
+    }
 
-    if (!params->command && params->argc != 0)
+    if (!params->command && params->argc != 0) {
+        icli_api_printf("command callback not provided while argc != 0 (%d)\n", params->argc);
         return -1;
+    }
 
-    if (params->argv && 0 == params->argc)
+    if (params->argv && 0 == params->argc) {
+        icli_api_printf("argv provided while argc = 0\n");
         return -1;
+    }
 
     parent = params->parent;
 
@@ -743,13 +774,16 @@ int icli_register_command(struct icli_command_params *params, struct icli_comman
     LIST_FOREACH(it, &parent->cmd_list, cmd_list_entry)
     {
         if (strcmp(it->name, params->name) == 0) {
+            icli_api_printf("command %s already registered\n", params->name);
             return -1;
         }
     }
 
     struct icli_command *cmd = calloc(1, sizeof(struct icli_command));
-    if (NULL == cmd)
+    if (NULL == cmd) {
+        icli_api_printf("unable to allocate memory for command %s\n", params->name);
         return -1;
+    }
 
     LIST_INIT(&cmd->cmd_list);
     cmd->name = strdup(params->name);
@@ -809,8 +843,10 @@ int icli_init(struct icli_params *params)
     memset(&icli, 0, sizeof(icli));
 
     icli.root_cmd = calloc(1, sizeof(struct icli_command));
-    if (!icli.root_cmd)
+    if (!icli.root_cmd) {
+        icli_api_printf("Unable to allocate memory for root command\n");
         return -1;
+    }
 
     LIST_INIT(&icli.root_cmd->cmd_list);
     icli.root_cmd->internal = true;
@@ -1053,21 +1089,26 @@ int icli_commands_to_dot(const char *fname)
     size_t written;
     FILE *out = fopen(fname, "w");
     if (!out) {
+        icli_api_printf("unable to open file %s (%m)\n", fname);
         return -1;
     }
 
     written = fwrite(DOT_GRAPH_PREFIX, sizeof(DOT_GRAPH_PREFIX) - 1, 1, out);
     if (written != 1) {
+        icli_api_printf("unable to write to file %s (%m)\n", fname);
         ret = -1;
         goto out;
     }
 
     ret = icli_print_command_to_dot(icli.root_cmd, out);
-    if (ret)
+    if (ret) {
+        icli_api_printf("unable to write to file %s (%m)\n", fname);
         goto out;
+    }
 
     written = fwrite(DOT_GRAPH_POSTFIX, sizeof(DOT_GRAPH_POSTFIX) - 1, 1, out);
     if (written != 1) {
+        icli_api_printf("unable to write to file %s (%m)\n", fname);
         ret = -1;
         goto out;
     }
@@ -1080,8 +1121,10 @@ out:
 
 int icli_reset_arguments(struct icli_command *cmd, struct icli_arg_val **argv)
 {
-    if (0 == cmd->argc || cmd->argc == ICLI_ARGS_DYNAMIC)
+    if (0 == cmd->argc || cmd->argc == ICLI_ARGS_DYNAMIC) {
+        icli_api_printf("unable to reset arguments, since command %s specified argc = 0\n", cmd->name);
         return -1;
+    }
 
     icli_clean_command_argv(cmd);
     return icli_init_command_argv(cmd, argv);
