@@ -484,7 +484,6 @@ static char **icli_completion(const char *text, int start, int end UNUSED)
     static char tmp[4096];
     memcpy(tmp, rl_line_buffer, (size_t)rl_end);
     tmp[rl_end] = '\0';
-    stripwhite(tmp);
 
     int argc = icli_parse_line(tmp, &cmd, argv, array_len(argv));
 
@@ -607,6 +606,37 @@ static enum icli_ret icli_quit(char *argv[] UNUSED, int argc UNUSED, void *conte
 {
     icli.done = true;
     return ICLI_OK;
+}
+
+static enum icli_ret icli_execute(char *argv[], int argc UNUSED, void *context UNUSED)
+{
+    FILE *input = fopen(argv[0], "r");
+    if (!input) {
+        icli_err_printf("Unable to open file %s:%m\n", argv[0]);
+        return ICLI_ERR;
+    }
+
+    ssize_t read;
+    char *line = NULL;
+    char *stripped_line;
+    size_t len = 0;
+    enum icli_ret ret = ICLI_OK;
+
+    while ((read = getline(&line, &len, input)) != -1) {
+        stripped_line = stripwhite(line);
+        if (*stripped_line && *stripped_line != '#') {
+            icli_printf("Executing: \"%s\"\n", stripped_line);
+            ret = icli_execute_line(stripped_line);
+            if (ret != ICLI_OK)
+                goto out;
+        }
+    }
+
+out:
+    free(line);
+    fclose(input);
+
+    return ret;
 }
 
 static int icli_init_default_cmds(struct icli_command *parent)
@@ -912,13 +942,22 @@ int icli_init(struct icli_params *params)
 
     icli_build_prompt(icli.curr_cmd);
 
-    struct icli_command *quit;
-    struct icli_command_params param = {.name = "quit", .command = icli_quit, .help = "Quit interactive shell"};
-    int ret = icli_register_command(&param, &quit);
+    struct icli_arg execute_args[] = {{.type = AT_File, .help = "File to read commands from"}};
+    struct icli_command_params cmd_params[] = {{.name = "quit", .command = icli_quit, .help = "Quit interactive shell"},
+                                               {.name = "execute",
+                                                .command = icli_execute,
+                                                .help = "Execute commands from file",
+                                                .argc = 1,
+                                                .argv = execute_args}};
+    struct icli_command *commands[array_len(cmd_params)] = {};
+    int ret = icli_register_commands(cmd_params, commands, array_len(cmd_params));
     if (ret) {
         goto err;
     }
-    quit->internal = true;
+
+    for (int i = 0; i < array_len(cmd_params); ++i) {
+        commands[i]->internal = true;
+    }
 
     ret = icli_init_default_cmds(NULL);
     if (ret) {

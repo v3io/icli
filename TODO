@@ -1,4 +1,2 @@
 * Add support for grep and filters in general
 * Add ability to run full commands in a single line
-* Add support for file argument completion
-* Add support for exec command to execute script
