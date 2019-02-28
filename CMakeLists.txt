@@ -1,6 +1,8 @@
 
 cmake_minimum_required(VERSION 2.8.6)
 
+enable_testing()
+
 # Enable folder grouping of projects in IDEs
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -54,6 +56,11 @@ target_link_libraries(${target}
                       icli
                       edit
                       )
+
+
+add_test("integ_test" ${CMAKE_SOURCE_DIR}/test/test.sh)
+SET_TESTS_PROPERTIES("integ_test"
+            PROPERTIES ENVIRONMENT "SRC_DIR=${CMAKE_SOURCE_DIR};BUILD_DIR=${CMAKE_BINARY_DIR}")
 
 find_package(Doxygen)
 

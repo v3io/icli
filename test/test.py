@@ -4,13 +4,30 @@ import pytest
 import pexpect
 import sys
 import time
+import os
+
+
+SRC_DIR = sys.argv[1]
+BUILD_DIR = sys.argv[2]
 
 
 class iCli(object):
     _prompt = '> '
 
     def __init__(self, cmd):
-        self.icli = pexpect.spawn(cmd, logfile=sys.stdout, echo=False)
+        args = ['--vgdb=no',
+                '--gen-suppressions=all',
+                '--error-exitcode=1',
+                '--leak-check=full',
+                '--show-leak-kinds=all',
+                '--errors-for-leak-kinds=all',
+                '--track-fds=yes',
+                '-v',
+                '--log-file=valgrind.log',
+                '--suppressions={}'.format(os.path.join(SRC_DIR, 'valgrind.sup')),
+                cmd]
+
+        self.icli = pexpect.spawn('valgrind', args=args, logfile=sys.stdout, echo=False)
         self.icli.expect(self._prompt)
 
     def exec_command(self, line, expect_output=None):
@@ -25,6 +42,8 @@ class iCli(object):
 
     def close(self):
         self.icli.close(force=True)
+        status = self.icli.wait()
+        assert status == 0
 
     def isalive(self):
         return self.icli.isalive()
@@ -32,7 +51,7 @@ class iCli(object):
 
 @pytest.fixture
 def icli(request):
-    icli = iCli('./build/cli')
+    icli = iCli(os.path.join(BUILD_DIR, 'cli'))
 
     def teardown():
         icli.close()
@@ -72,4 +91,4 @@ def test_icli(icli):
     assert not icli.isalive()
 
 if __name__ == '__main__':
-    sys.exit(pytest.main(sys.argv[0] + " -s " + ' '.join(sys.argv[1:])))
+    sys.exit(pytest.main(sys.argv[0] + " -s " + ' '.join(sys.argv[3:])))

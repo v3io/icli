@@ -31,3 +31,11 @@
    ...
 }
 
+{
+   <tinfo_leak>
+   Memcheck:Leak
+   ...
+   fun:tgetent
+   ...
+}
+
