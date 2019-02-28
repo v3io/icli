@@ -306,7 +306,11 @@ int icli_execute_line(char *line)
                                 icli_err_printf("\n");
                             }
 
-                            icli_err_printf("%s\t", vals->val);
+                            if (vals->help) {
+                                icli_err_printf("%s (%s)\t", vals->val, vals->help);
+                            } else {
+                                icli_err_printf("%s\t", vals->val);
+                            }
                             printed++;
                         }
 
@@ -609,6 +613,8 @@ static void icli_clean_command_argv(struct icli_command *cmd)
             for (struct icli_arg_val *val = cmd->argv[j]; val && val->val; ++val) {
                 free((void *)val->val);
                 val->val = NULL;
+                free((void *)val->help);
+                val->help = NULL;
             }
             free(cmd->argv[j]);
             cmd->argv[j] = NULL;
@@ -689,6 +695,13 @@ static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg_val 
                     if (!vals[j].val) {
                         ret = -1;
                         goto out;
+                    }
+                    if (argv[i][j].help) {
+                        vals[j].help = strdup(argv[i][j].help);
+                        if (!vals[j].help) {
+                            ret = -1;
+                            goto out;
+                        }
                     }
                 }
             }

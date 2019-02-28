@@ -78,6 +78,7 @@ typedef enum icli_ret (*icli_cmd_func_t)(char *[], int, void *);
  */
 struct icli_arg_val {
     const char *val; /**< Actual value */
+    const char *help; /**< Optional help string for the argument */
 };
 
 /**
