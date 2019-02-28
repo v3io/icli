@@ -56,7 +56,7 @@ struct icli_command {
     size_t n_cmds;
     struct icli_command *parent;
     int argc;
-    struct icli_arg_val **argv;
+    struct icli_arg *argv;
     int max_name_len;
     int name_len;
     char *prompt_line;
@@ -293,43 +293,45 @@ int icli_execute_line(char *line)
 
             if (command->argv) {
                 for (int i = 0; i < command->argc; ++i) {
-                    struct icli_arg_val *vals = command->argv[i];
-                    bool found = false;
+                    if (AT_Val == command->argv[i].type) {
+                        struct icli_arg_val *vals = command->argv[i].vals;
+                        bool found = false;
 
-                    if (!vals)
-                        continue;
+                        if (!vals)
+                            continue;
 
-                    while (vals->val) {
-                        if (strcmp(vals->val, argv[i]) == 0) {
-                            found = true;
-                            break;
+                        while (vals->val) {
+                            if (strcmp(vals->val, argv[i]) == 0) {
+                                found = true;
+                                break;
+                            }
+                            ++vals;
                         }
-                        ++vals;
-                    }
 
-                    if (!found) {
-                        icli_err_printf("Command %s %d argument invalid: %s. Possible values:\n", cmd, i, argv[i]);
+                        if (!found) {
+                            icli_err_printf("Command %s %d argument invalid: %s. Possible values:\n", cmd, i, argv[i]);
 
-                        int printed = 0;
-                        for (vals = command->argv[i]; vals->val; ++vals) {
-                            /* Print in six columns. */
-                            if (printed == 6) {
-                                printed = 0;
+                            int printed = 0;
+                            for (vals = command->argv[i].vals; vals->val; ++vals) {
+                                /* Print in six columns. */
+                                if (printed == 6) {
+                                    printed = 0;
+                                    icli_err_printf("\n");
+                                }
+
+                                if (vals->help) {
+                                    icli_err_printf("%s (%s)\t", vals->val, vals->help);
+                                } else {
+                                    icli_err_printf("%s\t", vals->val);
+                                }
+                                printed++;
+                            }
+
+                            if (printed)
                                 icli_err_printf("\n");
-                            }
 
-                            if (vals->help) {
-                                icli_err_printf("%s (%s)\t", vals->val, vals->help);
-                            } else {
-                                icli_err_printf("%s\t", vals->val);
-                            }
-                            printed++;
+                            return -1;
                         }
-
-                        if (printed)
-                            icli_err_printf("\n");
-
-                        return -1;
                     }
                 }
             }
@@ -386,6 +388,7 @@ static char *icli_command_arg_generator(const char *text, int state)
 {
     static size_t len;
     static struct icli_arg_val *vals;
+    static struct icli_arg *arg;
     const char *name;
 
     /* If this is a new word to complete, initialize now.  This
@@ -397,20 +400,35 @@ static char *icli_command_arg_generator(const char *text, int state)
         else
             len = 0;
 
-        if (len)
-            vals = icli.curr_completion_cmd->argv[icli.curr_completion_arg - 1];
-        else
-            vals = icli.curr_completion_cmd->argv[icli.curr_completion_arg];
+        if (len) {
+            arg = &icli.curr_completion_cmd->argv[icli.curr_completion_arg - 1];
+            vals = icli.curr_completion_cmd->argv[icli.curr_completion_arg - 1].vals;
+        } else {
+            arg = &icli.curr_completion_cmd->argv[icli.curr_completion_arg];
+            vals = icli.curr_completion_cmd->argv[icli.curr_completion_arg].vals;
+        }
     }
 
-    /* Return the next name which partially matches from the
-       argument list. */
-    while (vals && vals->val) {
-        name = vals->val;
+    switch (arg->type) {
+    case AT_Val:
+        /* Return the next name which partially matches from the
+           argument list. */
+        while (vals && vals->val) {
+            name = vals->val;
 
-        ++vals;
-        if (strncmp(name, text, len) == 0)
-            return strdup(name);
+            ++vals;
+            if (strncmp(name, text, len) == 0)
+                return strdup(name);
+        }
+        break;
+
+    case AT_File:
+        /* make readline attempt to complete with file name */
+        rl_attempted_completion_over = 0;
+        break;
+
+    default:
+        break;
     }
 
     /* If no names matched, then return NULL. */
@@ -622,14 +640,20 @@ static void icli_clean_command_argv(struct icli_command *cmd)
 {
     if (cmd->argc && cmd->argv) {
         for (int j = 0; j < cmd->argc; ++j) {
-            for (struct icli_arg_val *val = cmd->argv[j]; val && val->val; ++val) {
-                free((void *)val->val);
-                val->val = NULL;
-                free((void *)val->help);
-                val->help = NULL;
+            if (AT_Val == cmd->argv[j].type) {
+                for (struct icli_arg_val *val = cmd->argv[j].vals; val && val->val; ++val) {
+                    free((void *)val->val);
+                    val->val = NULL;
+                    free((void *)val->help);
+                    val->help = NULL;
+                }
+
+                free(cmd->argv[j].vals);
+                cmd->argv[j].vals = NULL;
             }
-            free(cmd->argv[j]);
-            cmd->argv[j] = NULL;
+
+            free((void *)cmd->argv[j].help);
+            cmd->argv[j].help = NULL;
         }
 
         free(cmd->argv);
@@ -677,12 +701,12 @@ int icli_register_commands(struct icli_command_params *params, struct icli_comma
     return ret;
 }
 
-static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg_val **argv)
+static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg *argv)
 {
     int ret = 0;
 
     if (argv) {
-        cmd->argv = calloc((size_t)cmd->argc, sizeof(struct icli_arg_val *));
+        cmd->argv = calloc((size_t)cmd->argc, sizeof(struct icli_arg));
         if (!cmd->argv) {
             icli_api_printf("Unable to allocate memory for argv in command:%s\n", cmd->name);
             ret = -1;
@@ -690,40 +714,54 @@ static int icli_init_command_argv(struct icli_command *cmd, struct icli_arg_val 
         }
 
         for (int i = 0; i < cmd->argc; ++i) {
-            int n_vals = 0;
-            for (struct icli_arg_val *val = argv[i]; val && val->val; ++val, ++n_vals)
-                ;
+            cmd->argv[i].type = argv[i].type;
 
-            if (n_vals) {
-                struct icli_arg_val *vals = calloc((size_t)(n_vals + 1), sizeof(struct icli_arg_val));
-                if (!vals) {
-                    icli_api_printf("Unable to allocate memory for vals of size %d in command:%s\n",
-                                    n_vals + 1,
-                                    cmd->name);
+            if (argv[i].help) {
+                cmd->argv[i].help = strdup(argv[i].help);
+                if (!cmd->argv[i].help) {
+                    icli_api_printf("Unable to allocate help string for arg %d (%s)\n", i, argv[i].help);
                     ret = -1;
                     goto out;
                 }
+            }
 
-                cmd->argv[i] = vals;
+            if (AT_Val == argv[i].type) {
+                int n_vals = 0;
 
-                for (int j = 0; argv[i][j].val; ++j) {
-                    vals[j].val = strdup(argv[i][j].val);
-                    if (!vals[j].val) {
-                        icli_api_printf("Unable to allocate memory for val %s in command:%s\n",
-                                        argv[i][j].val,
+                for (struct icli_arg_val *val = argv[i].vals; val && val->val; ++val, ++n_vals)
+                    ;
+
+                if (n_vals) {
+                    struct icli_arg_val *vals = calloc((size_t)(n_vals + 1), sizeof(struct icli_arg_val));
+                    if (!vals) {
+                        icli_api_printf("Unable to allocate memory for vals of size %d in command:%s\n",
+                                        n_vals + 1,
                                         cmd->name);
                         ret = -1;
                         goto out;
                     }
-                    if (argv[i][j].help) {
-                        vals[j].help = strdup(argv[i][j].help);
-                        if (!vals[j].help) {
-                            icli_api_printf("Unable to allocate memory for val %s help %s in command:%s\n",
-                                            argv[i][j].val,
-                                            argv[i][j].help,
+
+                    cmd->argv[i].vals = vals;
+
+                    for (int j = 0; argv[i].vals[j].val; ++j) {
+                        vals[j].val = strdup(argv[i].vals[j].val);
+                        if (!vals[j].val) {
+                            icli_api_printf("Unable to allocate memory for val %s in command:%s\n",
+                                            argv[i].vals[j].val,
                                             cmd->name);
                             ret = -1;
                             goto out;
+                        }
+                        if (argv[i].vals[j].help) {
+                            vals[j].help = strdup(argv[i].vals[j].help);
+                            if (!vals[j].help) {
+                                icli_api_printf("Unable to allocate memory for val %s help %s in command:%s\n",
+                                                argv[i].vals[j].val,
+                                                argv[i].vals[j].help,
+                                                cmd->name);
+                                ret = -1;
+                                goto out;
+                            }
                         }
                     }
                 }
@@ -866,7 +904,6 @@ int icli_init(struct icli_params *params)
 
     /* Tell the completer that we want a crack first. */
     rl_attempted_completion_function = icli_completion;
-    rl_completion_entry_function = icli_command_generator;
 
     using_history();
     stifle_history(params->history_size);
@@ -1119,7 +1156,7 @@ out:
     return ret;
 }
 
-int icli_reset_arguments(struct icli_command *cmd, struct icli_arg_val **argv)
+int icli_reset_arguments(struct icli_command *cmd, struct icli_arg *argv)
 {
     if (0 == cmd->argc || cmd->argc == ICLI_ARGS_DYNAMIC) {
         icli_api_printf("unable to reset arguments, since command %s specified argc = 0\n", cmd->name);

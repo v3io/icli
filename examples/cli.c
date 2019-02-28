@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <linux/limits.h>
 
 struct my_context {
     int something;
@@ -74,6 +75,16 @@ static enum icli_ret cli_containers_list(char *argv[], int argc, void *context)
 static enum icli_ret cli_interface(char *argv[], int argc, void *context)
 {
     icli_printf("Set interface %s\n", argv[0]);
+
+    return ICLI_OK;
+}
+
+static enum icli_ret cli_cat(char *argv[], int argc, void *context)
+{
+    char cmd[PATH_MAX];
+
+    snprintf(cmd, sizeof(cmd), "cat %s", argv[0]);
+    system(cmd);
 
     return ICLI_OK;
 }
@@ -157,7 +168,9 @@ int main(int argc, char *argv[])
     struct icli_command_params param = {.name = "containers", .help = "Containers"};
 
     struct icli_arg_val show_first_arg[] = {{.val = "containers"}, {.val = "services"}, {.val = NULL}};
-    struct icli_arg_val *show_args[] = {show_first_arg};
+    struct icli_arg show_args[] = {{.type = AT_Val, .vals = show_first_arg, .help = "Arguments to show info for"}};
+
+    struct icli_arg cat_args[] = {{.type = AT_File, .help = "File to cat"}};
 
     res = icli_register_command(&param, &containers);
     if (res) {
@@ -185,6 +198,20 @@ int main(int argc, char *argv[])
     param.command = cli_show;
     param.argc = 1;
     param.argv = show_args;
+
+    res = icli_register_command(&param, NULL);
+    if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
+        ret = EXIT_FAILURE;
+        goto out;
+    }
+
+    memset(&param, 0, sizeof(param));
+    param.help = "Cat contents of file";
+    param.name = "cat";
+    param.command = cli_cat;
+    param.argc = 1;
+    param.argv = cat_args;
 
     res = icli_register_command(&param, NULL);
     if (res) {

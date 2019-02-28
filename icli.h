@@ -74,11 +74,31 @@ struct icli_command;
 typedef enum icli_ret (*icli_cmd_func_t)(char *[], int, void *);
 
 /**
+ * Argument type for command
+ */
+enum icli_arg_type {
+    AT_None, /**< No argument */
+    AT_Val, /**< Argument with list of values */
+    AT_File /**< File */
+};
+
+/**
  * Argument value
  */
 struct icli_arg_val {
     const char *val; /**< Actual value */
     const char *help; /**< Optional help string for the argument */
+};
+
+/**
+ * Argument definition
+ */
+struct icli_arg {
+    enum icli_arg_type type; /**< Type of the argument @see icli_arg_type() */
+    union {
+        struct icli_arg_val *vals; /**< Array of possible values @see icli_arg_val() */
+    };
+    const char *help; /**< Optional help string */
 };
 
 /**
@@ -93,7 +113,7 @@ struct icli_command_params {
     int argc; /**< number of arguments to the command @see #ICLI_ARGS_DYNAMIC */
     /** Argument value that are acceptable at each position. NULL means no validation on argument in array. argv can be
      * NULL. in such case no validation is performed */
-    struct icli_arg_val **argv;
+    struct icli_arg *argv;
 };
 
 /**
@@ -170,4 +190,4 @@ int icli_execute_line(char *line);
  * @param argv new values. for explanation @see icli_command_params()
  * @return 0 on success, -1 on error
  */
-int icli_reset_arguments(struct icli_command *cmd, struct icli_arg_val **argv);
+int icli_reset_arguments(struct icli_command *cmd, struct icli_arg *argv);
