@@ -334,6 +334,7 @@ int icli_execute_line(char *line)
                                 cmd,
                                 command->argc,
                                 argc);
+                icli_print_command_help(command);
                 return -1;
             }
 

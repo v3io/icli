@@ -72,6 +72,12 @@ static enum icli_ret cli_containers_list(char *argv[], int argc, void *context)
     return ICLI_OK;
 }
 
+static enum icli_ret cli_do(char *argv[], int argc, void *context)
+{
+    icli_printf("No problemmo\n");
+    return ICLI_OK;
+}
+
 static enum icli_ret cli_interface(char *argv[], int argc, void *context)
 {
     icli_printf("Set interface %s\n", argv[0]);
@@ -173,7 +179,28 @@ int main(int argc, char *argv[])
     struct icli_arg cat_args[] = {{.type = AT_File, .help = "File to cat"}};
     struct icli_arg intf_args[] = {{.type = AT_None, .help = "Interface number"}};
 
+    struct icli_arg_val do_first_arg[] = {{.val = "something"}, {.val = "nothing"}, {.val = NULL}};
+    struct icli_arg_val do_second_arg[] = {{.val = "good"}, {.val = "bad"}, {.val = NULL}};
+    struct icli_arg do_args[] = {{.type = AT_Val, .vals = do_first_arg},
+                                 {.type = AT_Val, .vals = do_second_arg},
+                                 {.type = AT_File},
+                                 {.type = AT_None}};
+
     res = icli_register_command(&param, &containers);
+    if (res) {
+        fprintf(stderr, "Unable to register command: %s\n", param.name);
+        ret = EXIT_FAILURE;
+        goto out;
+    }
+
+    memset(&param, 0, sizeof(param));
+    param.help = "Foo bar";
+    param.name = "do";
+    param.command = cli_do;
+    param.argc = 4;
+    param.argv = do_args;
+
+    res = icli_register_command(&param, NULL);
     if (res) {
         fprintf(stderr, "Unable to register command: %s\n", param.name);
         ret = EXIT_FAILURE;
