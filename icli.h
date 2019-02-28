@@ -21,6 +21,7 @@
 #pragma once
 
 #include <stdarg.h>
+#include <stdbool.h>
 
 /**
  * @file
@@ -46,6 +47,11 @@ typedef void (*icli_cmd_hook_t)(const char *, char *[], int, void *);
  * Output hook callback
  */
 typedef void (*icli_output_hook_t)(const char *, va_list, void *);
+
+/**
+ * Filter hook callback
+ */
+typedef bool (*icli_filter_hook_t)(char *[], int, const char *, va_list, void *);
 
 /**
  * Structure to initialize the library instance
@@ -118,6 +124,16 @@ struct icli_command_params {
 };
 
 /**
+ * Filter registration parameters
+ */
+struct icli_filter_params {
+    const char *name; /**< name of the command - can't be NULL, or empty string */
+    const char *help; /**< help string for the command - can't be NULL, or empty string */
+    icli_cmd_func_t command; /**< the callback to call when filter is envoked */
+    icli_filter_hook_t filter; /**< the callback to call on each output line */
+};
+
+/**
  * Initialize cli engine
  * @param params
  * @return 0 on success
@@ -141,6 +157,13 @@ void icli_run(void);
  * @return 0 on success, !0 on error
  */
 int icli_register_command(struct icli_command_params *params, struct icli_command **out_command);
+
+/**
+ * Register new filter
+ * @param params params to initialize with @see icli_filter_params()
+ * @return 0 on success, !0 on error
+ */
+int icli_register_filter(struct icli_filter_params *params);
 
 /**
  * Register number of commands

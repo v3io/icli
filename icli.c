@@ -25,7 +25,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdint.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -64,6 +63,16 @@ struct icli_command {
     bool internal;
 };
 
+/* A structure which contains information on the filters this program
+   can understand. */
+struct icli_filter {
+    LIST_ENTRY(icli_filter) filter_list_entry;
+    char *name; /* User printable name of the filter. */
+    char *doc; /* Documentation for this filter.  */
+    icli_cmd_func_t command; /* Function to call when command is envoked */
+    icli_filter_hook_t filter; /* the callback to call on each output line */
+};
+
 struct icli {
     void *user_data;
     /* When non-zero, this means the user is done using this program. */
@@ -86,6 +95,11 @@ struct icli {
     icli_cmd_hook_t cmd_hook;
     icli_output_hook_t out_hook;
     icli_output_hook_t err_hook;
+
+    LIST_HEAD(, icli_filter) filter_list;
+    struct icli_filter *curr_filter;
+    char *filter_argv[ICLI_ARGS_MAX];
+    int filter_argc;
 };
 
 static struct icli icli;
@@ -141,6 +155,19 @@ static struct icli_command *icli_find_command(char *name)
     return ((struct icli_command *)NULL);
 }
 
+static struct icli_filter *icli_find_filter(char *name)
+{
+    struct icli_filter *it;
+
+    LIST_FOREACH(it, &icli.filter_list, filter_list_entry)
+    {
+        if (strcmp(name, it->name) == 0)
+            return it;
+    }
+
+    return ((struct icli_filter *)NULL);
+}
+
 static void icli_cat_command(struct icli_command *curr)
 {
     if (!curr->parent)
@@ -191,11 +218,21 @@ static void icli_build_prompt(struct icli_command *command)
     strcat(icli.curr_prompt, "> ");
 }
 
-static int icli_parse_line(char *line, char **cmd, char *argv[], int argc)
+static int icli_parse_line(char *line,
+                           char **cmd,
+                           char *argv[],
+                           int argc,
+                           char **filter,
+                           char *filter_argv[],
+                           int filter_argc)
 {
     int n_args = 0;
+    int n_filter_args = 0;
     int i = 0;
     char *tmp;
+
+    *cmd = NULL;
+    *filter = NULL;
 
     /* Isolate the command word. */
     while (line[i] && isspace(line[i]))
@@ -215,8 +252,13 @@ static int icli_parse_line(char *line, char **cmd, char *argv[], int argc)
         while (isspace(line[i]))
             i++;
 
-        if (line[i] && n_args < argc) {
-            argv[n_args++] = &line[i];
+        if (line[i]) {
+            if ('|' == line[i]) {
+                line[i++] = '\0';
+                break;
+            } else if (n_args < argc) {
+                argv[n_args++] = &line[i];
+            }
         }
 
         while (line[i] && !isspace(line[i]))
@@ -224,6 +266,37 @@ static int icli_parse_line(char *line, char **cmd, char *argv[], int argc)
 
         if (line[i])
             line[i++] = '\0';
+    }
+
+    if (line[i]) {
+        /* Isolate the filter word. */
+        while (line[i] && isspace(line[i]))
+            i++;
+        tmp = &line[i];
+
+        while (line[i] && !isspace(line[i]))
+            i++;
+
+        *filter = tmp;
+
+        if (line[i])
+            line[i++] = '\0';
+
+        /* Get argument to filter, if any. */
+        while (line[i]) {
+            while (isspace(line[i]))
+                i++;
+
+            if (line[i] && n_filter_args < filter_argc) {
+                filter_argv[n_filter_args++] = &line[i];
+            }
+
+            while (line[i] && !isspace(line[i]))
+                i++;
+
+            if (line[i])
+                line[i++] = '\0';
+        }
     }
 
     return n_args;
@@ -313,10 +386,41 @@ int icli_execute_line(char *line)
     struct icli_command *command;
     static char *argv[ICLI_ARGS_MAX];
     char *cmd;
+    char *filter;
 
-    int argc = icli_parse_line(line, &cmd, argv, array_len(argv));
+    int argc =
+        icli_parse_line(line, &cmd, argv, array_len(argv), &filter, icli.filter_argv, array_len(icli.filter_argv));
 
     command = icli_find_command(cmd);
+
+    icli.curr_row = 0;
+    icli.error_printed = false;
+
+#if 0
+    if (filter) {
+        icli.curr_filter = icli_find_filter(filter);
+        if (!icli.curr_filter) {
+            icli_err_printf("%s: No such filter\n", filter);
+            return -1;
+        }
+
+        enum icli_ret filter_ret = icli.curr_filter->command(icli.filter_argv, icli.filter_argc, icli.user_data);
+        switch (filter_ret) {
+        case ICLI_OK:
+            break;
+        case ICLI_ERR_ARG:
+            if (!icli.error_printed)
+                icli_err_printf("Filter argument error\n");
+            return -1;
+            break;
+        case ICLI_ERR:
+            if (!icli.error_printed)
+                icli_err_printf("Error\n");
+            return -1;
+            break;
+        }
+    }
+#endif
 
     if (!command) {
         icli_err_printf("%s: No such command\n", cmd);
@@ -368,15 +472,13 @@ int icli_execute_line(char *line)
 
         icli_set_command_prompt(command, argv, argc);
 
-        icli.curr_row = 0;
-        icli.error_printed = false;
-
         if (icli.cmd_hook)
             icli.cmd_hook(command->name, argv, argc, icli.user_data);
 
         /* Call the function. */
         enum icli_ret ret = command->func(argv, argc, icli.user_data);
 
+        icli.curr_filter = NULL;
         icli.skip_output = false;
 
         switch (ret) {
@@ -509,12 +611,14 @@ static char **icli_completion(const char *text, int start, int end UNUSED)
 
     static char *argv[ICLI_ARGS_MAX];
     char *cmd;
+    char *filter;
 
     static char tmp[4096];
     memcpy(tmp, rl_line_buffer, (size_t)rl_end);
     tmp[rl_end] = '\0';
 
-    int argc = icli_parse_line(tmp, &cmd, argv, array_len(argv));
+    int argc =
+        icli_parse_line(tmp, &cmd, argv, array_len(argv), &filter, icli.filter_argv, array_len(icli.filter_argv));
 
     /* Don't do filename completion even if our generator finds no matches. */
     rl_attempted_completion_over = 1;
@@ -934,6 +1038,25 @@ out:
     return ret;
 }
 
+static enum icli_ret icli_grep_command(char *argv[], int argc, void *context)
+{
+    if (argc != 1) {
+        icli_err_printf("grep filter accepts only a single argument as the string to find\n");
+        return ICLI_ERR_ARG;
+    }
+
+    return ICLI_OK;
+}
+
+static bool icli_grep_filter(char *argv[], int argc, const char *format, va_list list, void *context)
+{
+    static char buffer[4096];
+
+    vsprintf(buffer, format, list);
+
+    return strstr(buffer, argv[0]) != NULL;
+}
+
 int icli_init(struct icli_params *params)
 {
     memset(&icli, 0, sizeof(icli));
@@ -1021,6 +1144,15 @@ int icli_init(struct icli_params *params)
         goto err;
     }
 
+    struct icli_filter_params grep_params = {.name = "grep",
+                                             .help = "Print only lines that include certain string",
+                                             .command = icli_grep_command,
+                                             .filter = icli_grep_filter};
+    ret = icli_register_filter(&grep_params);
+    if (ret) {
+        goto err;
+    }
+
     return 0;
 err:
     icli_cleanup();
@@ -1030,6 +1162,17 @@ err:
 void icli_cleanup(void)
 {
     icli_clean_command(icli.root_cmd);
+
+    while (!LIST_EMPTY(&icli.filter_list)) {
+        struct icli_filter *it = LIST_FIRST(&icli.filter_list);
+        LIST_REMOVE(it, filter_list_entry);
+        free((void *)it->name);
+        it->name = NULL;
+        free((void *)it->doc);
+        it->doc = NULL;
+
+        free((void *)it);
+    }
 
     HISTORY_STATE *hist_state = history_get_history_state();
     HIST_ENTRY **mylist = history_list();
@@ -1143,6 +1286,7 @@ void icli_printf(const char *format, ...)
 {
     va_list args;
     va_list args_hook;
+    bool print = true;
 
     icli_handle_print_line();
 
@@ -1151,13 +1295,21 @@ void icli_printf(const char *format, ...)
 
     va_start(args, format);
 
-    if (icli.out_hook) {
+    if (icli.curr_filter) {
+        va_copy(args_hook, args);
+        print = icli.curr_filter->filter(icli.filter_argv, icli.filter_argc, format, args_hook, icli.user_data);
+        va_end(args_hook);
+    }
+
+    if (icli.out_hook && print) {
         va_copy(args_hook, args);
         icli.out_hook(format, args_hook, icli.user_data);
         va_end(args_hook);
     }
 
-    vprintf(format, args);
+    if (print) {
+        vprintf(format, args);
+    }
     va_end(args);
 }
 
@@ -1281,4 +1433,52 @@ int icli_reset_arguments(struct icli_command *cmd, struct icli_arg *argv)
 
     icli_clean_command_argv(cmd);
     return icli_init_command_argv(cmd, argv);
+}
+
+int icli_register_filter(struct icli_filter_params *params)
+{
+    struct icli_filter *it;
+
+    if (!params) {
+        icli_api_printf("NULL params specified\n");
+        return -1;
+    }
+
+    if (!params->name || !(*params->name) || !params->help || !(*params->help)) {
+        icli_api_printf("name or help argument not provided\n");
+        return -1;
+    }
+
+    if (!params->filter) {
+        icli_api_printf("filter callback not provided\n");
+        return -1;
+    }
+
+    if (!params->command) {
+        icli_api_printf("command callback not provided\n");
+        return -1;
+    }
+
+    LIST_FOREACH(it, &icli.filter_list, filter_list_entry)
+    {
+        if (strcmp(it->name, params->name) == 0) {
+            icli_api_printf("filter %s already registered\n", params->name);
+            return -1;
+        }
+    }
+
+    struct icli_filter *filter = calloc(1, sizeof(struct icli_filter));
+    if (NULL == filter) {
+        icli_api_printf("unable to allocate memory for filter %s\n", params->name);
+        return -1;
+    }
+
+    filter->name = strdup(params->name);
+    filter->doc = strdup(params->help);
+    filter->filter = params->filter;
+    filter->command = params->command;
+
+    LIST_INSERT_HEAD(&icli.filter_list, filter, filter_list_entry);
+
+    return 0;
 }
