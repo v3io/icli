@@ -171,6 +171,7 @@ int main(int argc, char *argv[])
     struct icli_arg show_args[] = {{.type = AT_Val, .vals = show_first_arg, .help = "Arguments to show info for"}};
 
     struct icli_arg cat_args[] = {{.type = AT_File, .help = "File to cat"}};
+    struct icli_arg intf_args[] = {{.type = AT_None, .help = "Interface number"}};
 
     res = icli_register_command(&param, &containers);
     if (res) {
@@ -226,6 +227,7 @@ int main(int argc, char *argv[])
     param.short_name = "intf";
     param.command = cli_interface;
     param.argc = 1;
+    param.argv = intf_args;
 
     res = icli_register_command(&param, &interface);
     if (res) {

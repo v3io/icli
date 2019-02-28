@@ -261,6 +261,52 @@ static int icli_set_command_prompt(struct icli_command *cmd, char *argv[], int a
     return 0;
 }
 
+static void icli_print_command_help(struct icli_command *cmd)
+{
+    icli_printf("%s    %s\n", cmd->name, cmd->doc);
+
+    icli_printf("Arguments:\n");
+
+    if (cmd->argc > 0) {
+        for (int i = 0; i < cmd->argc; ++i) {
+            icli_printf("---------------------------------------------------------------\n");
+            if (cmd->argv) {
+                switch (cmd->argv[i].type) {
+                case AT_Val:
+                    if (cmd->argv[i].help)
+                        icli_printf("%s\n", cmd->argv[i].help);
+                    for (struct icli_arg_val *vals = cmd->argv[i].vals; vals && vals->val; ++vals) {
+                        if (vals->help)
+                            icli_printf("%s (%s)\n", vals->val, vals->help);
+                        else
+                            icli_printf("%s\n", vals->val);
+                    }
+                    break;
+
+                case AT_File:
+                    if (cmd->argv[i].help)
+                        icli_printf("filename (%s)\n", cmd->argv[i].help);
+                    else
+                        icli_printf("filename\n");
+                    break;
+
+                default:
+                    if (cmd->argv[i].help)
+                        icli_printf("arg%d (%s)\n", i, cmd->argv[i].help);
+                    else
+                        icli_printf("arg%d\n", i);
+                }
+            } else {
+                icli_printf("arg%d\n", i);
+            }
+        }
+    } else if (ICLI_ARGS_DYNAMIC == cmd->argc) {
+        icli_printf("Variable number arguments accepted\n");
+    } else if (0 == cmd->argc) {
+        icli_printf("None\n");
+    }
+}
+
 int icli_execute_line(char *line)
 {
     struct icli_command *command;
@@ -309,27 +355,8 @@ int icli_execute_line(char *line)
                         }
 
                         if (!found) {
-                            icli_err_printf("Command %s %d argument invalid: %s. Possible values:\n", cmd, i, argv[i]);
-
-                            int printed = 0;
-                            for (vals = command->argv[i].vals; vals->val; ++vals) {
-                                /* Print in six columns. */
-                                if (printed == 6) {
-                                    printed = 0;
-                                    icli_err_printf("\n");
-                                }
-
-                                if (vals->help) {
-                                    icli_err_printf("%s (%s)\t", vals->val, vals->help);
-                                } else {
-                                    icli_err_printf("%s\t", vals->val);
-                                }
-                                printed++;
-                            }
-
-                            if (printed)
-                                icli_err_printf("\n");
-
+                            icli_err_printf("Command %s %d argument invalid: %s\n", cmd, i, argv[i]);
+                            icli_print_command_help(command);
                             return -1;
                         }
                     }
@@ -576,7 +603,10 @@ static enum icli_ret icli_help(char *argv[], int argc, void *context UNUSED)
     LIST_FOREACH(it, &icli.curr_cmd->cmd_list, cmd_list_entry)
     {
         if (0 == argc || (strcmp(argv[0], it->name) == 0)) {
-            icli_printf("    %-*s : %s\n", icli.curr_cmd->max_name_len, it->name, it->doc);
+            if (argc > 0)
+                icli_print_command_help(it);
+            else
+                icli_printf("    %-*s : %s\n", icli.curr_cmd->max_name_len, it->name, it->doc);
             printed++;
         }
     }
