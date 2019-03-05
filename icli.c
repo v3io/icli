@@ -986,7 +986,7 @@ int icli_init(struct icli_params *params)
         goto err;
     }
 
-    for (int i = 0; i < array_len(cmd_params); ++i) {
+    for (size_t i = 0; i < array_len(cmd_params); ++i) {
         commands[i]->internal = true;
     }
 
