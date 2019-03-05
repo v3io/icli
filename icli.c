@@ -544,16 +544,12 @@ static char **icli_completion(const char *text, int start, int end UNUSED)
 
 static enum icli_ret icli_history(char *argv[] UNUSED, int argc UNUSED, void *context UNUSED)
 {
-    HIST_ENTRY *he;
-
-    /* rewind history */
-    while (previous_history())
-        ;
-
-    for (he = current_history(); he != NULL; he = next_history()) {
-        // icli_printf("%5d  %s\n", *((int*)he->data) - 1, he->line);
-        icli_printf("%s\n", he->line);
+    HISTORY_STATE *hist_state = history_get_history_state();
+    HIST_ENTRY **mylist = history_list();
+    for (int i = 0; i < hist_state->length; i++) {
+        icli_printf("%d %s\n", history_base + i, mylist[i]->line);
     }
+    free(hist_state);
 
     return ICLI_OK;
 }
@@ -1006,6 +1002,15 @@ void icli_cleanup(void)
     icli_clean_command(icli.root_cmd);
 
     rl_callback_handler_remove();
+
+    HISTORY_STATE *hist_state = history_get_history_state();
+    HIST_ENTRY **mylist = history_list();
+
+    if (mylist)
+        free(mylist[0]);
+
+    free(mylist);
+    free(hist_state);
 
     free(rl_readline_name);
     rl_readline_name = "";

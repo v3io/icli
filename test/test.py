@@ -82,6 +82,8 @@ def test_icli(icli):
     icli.exec_command('end')
     icli.exec_command('end')
 
+    icli.exec_command('history')
+
     icli.sendline('quit')
     for x in xrange(30):
         if not icli.isalive():
