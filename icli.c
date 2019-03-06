@@ -31,6 +31,7 @@
 #include <assert.h>
 #include <sys/queue.h>
 #include <termios.h>
+#include <errno.h>
 
 #include <editline/readline.h>
 
@@ -71,7 +72,7 @@ struct icli {
     struct icli_command *curr_cmd;
     char *curr_prompt;
     const char *prompt;
-
+    const char *hist_file;
     int rows;
     int cols;
     int curr_row;
@@ -936,6 +937,7 @@ out:
 int icli_init(struct icli_params *params)
 {
     memset(&icli, 0, sizeof(icli));
+    int ret = 0;
 
     icli.root_cmd = calloc(1, sizeof(struct icli_command));
     if (!icli.root_cmd) {
@@ -951,6 +953,20 @@ int icli_init(struct icli_params *params)
     icli.user_data = params->user_data;
 
     icli.prompt = strdup(params->prompt);
+    if (!icli.prompt) {
+        icli_api_printf("Unable to allocate memory for prompt\n");
+        ret = -1;
+        goto err;
+    }
+
+    if (params->hist_file) {
+        icli.hist_file = strdup(params->hist_file);
+        if (!icli.hist_file) {
+            icli_api_printf("Unable to allocate memory for hist_file\n");
+            ret = -1;
+            goto err;
+        }
+    }
 
     icli.cmd_hook = params->cmd_hook;
     icli.out_hook = params->out_hook;
@@ -958,12 +974,26 @@ int icli_init(struct icli_params *params)
 
     /* Allow conditional parsing of the ~/.inputrc file. */
     rl_readline_name = strdup(params->app_name);
+    if (!rl_readline_name) {
+        icli_api_printf("Unable to allocate memory for rl_readline_name\n");
+        ret = -1;
+        goto err;
+    }
 
     /* Tell the completer that we want a crack first. */
     rl_attempted_completion_function = icli_completion;
 
     using_history();
     stifle_history(params->history_size);
+
+    if (icli.hist_file) {
+        ret = read_history(icli.hist_file);
+        if (ret && ret != ENOENT) {
+            icli_api_printf("Unable to read history from %s (%d)\n", icli.hist_file, ret);
+            ret = -1;
+            goto err;
+        }
+    }
 
     rl_get_screen_size(&icli.rows, &icli.cols);
 
@@ -977,7 +1007,7 @@ int icli_init(struct icli_params *params)
                                                 .argc = 1,
                                                 .argv = execute_args}};
     struct icli_command *commands[array_len(cmd_params)] = {};
-    int ret = icli_register_commands(cmd_params, commands, array_len(cmd_params));
+    ret = icli_register_commands(cmd_params, commands, array_len(cmd_params));
     if (ret) {
         goto err;
     }
@@ -1001,8 +1031,6 @@ void icli_cleanup(void)
 {
     icli_clean_command(icli.root_cmd);
 
-    rl_callback_handler_remove();
-
     HISTORY_STATE *hist_state = history_get_history_state();
     HIST_ENTRY **mylist = history_list();
 
@@ -1012,13 +1040,24 @@ void icli_cleanup(void)
     free(mylist);
     free(hist_state);
 
+    if (icli.hist_file) {
+        int ret = write_history(icli.hist_file);
+        if (ret)
+            icli_api_printf("Unable to save history to %s (%d)\n", icli.hist_file, ret);
+    }
+
     clear_history();
+
+    rl_callback_handler_remove();
 
     free(rl_readline_name);
     rl_readline_name = "";
 
     free((void *)icli.prompt);
     free((void *)icli.curr_prompt);
+    free((void *)icli.hist_file);
+
+    memset(&icli, 0, sizeof(icli));
 }
 
 void icli_run(void)

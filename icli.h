@@ -56,6 +56,7 @@ struct icli_params {
     int history_size; /**< how many commands to keep in history */
     const char *app_name; /**< name of application for interfacing ~/.inputrc */
     const char *prompt; /**< prompt string (will be post-fixed by "> " */
+    const char *hist_file; /**< history file to load/store history. can be NULL for not saving history */
     icli_cmd_hook_t cmd_hook; /**< hook to be called before command is executed */
     icli_output_hook_t out_hook; /**< hook to be called when there is output */
     icli_output_hook_t err_hook; /**< hook to be called when there is error print */

@@ -160,6 +160,7 @@ int main(int argc, char *argv[])
                                  .history_size = 10,
                                  .app_name = "example_cli",
                                  .prompt = "my_cli",
+                                 .hist_file = "/tmp/icli_history",
                                  .cmd_hook = cli_cmd_hook,
                                  .out_hook = cli_out_hook,
                                  .err_hook = cli_err_hook};
