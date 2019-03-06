@@ -7,14 +7,6 @@
 }
 
 {
-   <editline_history_leak>
-   Memcheck:Leak
-   ...
-   fun:add_history
-   ...
-}
-
-{
    <editline_prompt_leak>
    Memcheck:Leak
    ...

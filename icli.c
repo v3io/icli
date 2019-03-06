@@ -1012,6 +1012,8 @@ void icli_cleanup(void)
     free(mylist);
     free(hist_state);
 
+    clear_history();
+
     free(rl_readline_name);
     rl_readline_name = "";
 
