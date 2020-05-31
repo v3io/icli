@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Iguazio.io Systems Ltd.
+ * Copyright 2019-2020 Iguazio.io Systems Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License") with
  * an addition restriction as set forth herein. You may not use this
@@ -636,26 +636,26 @@ static enum icli_ret icli_quit(char *argv[] UNUSED, int argc UNUSED, void *conte
     return ICLI_OK;
 }
 
-static enum icli_ret icli_execute(char *argv[], int argc UNUSED, void *context UNUSED)
+int icli_exec_script(const char *fname)
 {
-    FILE *input = fopen(argv[0], "r");
+    FILE *input = fopen(fname, "r");
     if (!input) {
-        icli_err_printf("Unable to open file %s:%m\n", argv[0]);
-        return ICLI_ERR;
+        icli_err_printf("Unable to open file %s:%m\n", fname);
+        return -1;
     }
 
     ssize_t read;
     char *line = NULL;
     char *stripped_line;
     size_t len = 0;
-    enum icli_ret ret = ICLI_OK;
+    int ret = 0;
 
     while ((read = getline(&line, &len, input)) != -1) {
         stripped_line = stripwhite(line);
         if (*stripped_line && *stripped_line != '#') {
             icli_printf("Executing: \"%s\"\n", stripped_line);
             ret = icli_execute_line(stripped_line);
-            if (ret != ICLI_OK)
+            if (ret)
                 goto out;
         }
     }
@@ -665,6 +665,15 @@ out:
     fclose(input);
 
     return ret;
+}
+
+static enum icli_ret icli_execute(char *argv[], int argc UNUSED, void *context UNUSED)
+{
+    int ret = icli_exec_script(argv[0]);
+    if (ret)
+        return ICLI_ERR;
+
+    return ICLI_OK;
 }
 
 static int icli_init_default_cmds(struct icli_command *parent)

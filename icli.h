@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Iguazio.io Systems Ltd.
+ * Copyright 2019-2020 Iguazio.io Systems Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License") with
  * an addition restriction as set forth herein. You may not use this
@@ -192,3 +192,9 @@ int icli_execute_line(char *line);
  * @return 0 on success, -1 on error
  */
 int icli_reset_arguments(struct icli_command *cmd, struct icli_arg *argv);
+
+/**
+ * Execute a script
+ * @param fname the path to the script
+ */
+int icli_exec_script(const char *fname);
