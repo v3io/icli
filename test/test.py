@@ -92,5 +92,6 @@ def test_icli(icli):
 
     assert not icli.isalive()
 
+
 if __name__ == '__main__':
     sys.exit(pytest.main(sys.argv[0] + " -s " + ' '.join(sys.argv[3:])))
